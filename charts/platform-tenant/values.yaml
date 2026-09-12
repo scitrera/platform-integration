@@ -1,0 +1,94 @@
+tenant: example
+phase: 0
+development: false
+bootstrapRevision: '1'
+sharedNamespace: platform-shared
+storageNamespace: platform-storage
+publicOrigin: https://platform.example.test
+adminEmail: admin@example.test
+seedDevelopmentAdmin: false
+databaseInstances: 1
+storage:
+  className: ''
+  size: 10Gi
+images:
+  backend: ''
+  aether: ''
+  memorylayer: ''
+  connectors: ''
+  provider: ''
+  sahara: ''
+  sidecar: ''
+  code: ''
+  mlPostgres: ''
+  postgres: ''
+  skills: ''
+  sparkroute: ''
+  tools: ''
+secrets:
+  mlDatabase: memorylayer-db
+  dcDatabase: connectors-db
+  aether: aether-config
+  memorylayer: memorylayer-env
+  connectors: connectors-env
+  platform: platform-env
+  provider: provider-env
+  gatewayToken: gateway-token
+  tls:
+    server: aether-client-server
+    orchestrator: aether-client-orchestrator
+    management: aether-client-management
+    anonymous: aether-client-anonymous
+    platform-server: aether-client-platform-server
+    platform-bridge: aether-client-platform-bridge
+    memorylayer: aether-client-memorylayer
+    data-connectors: aether-client-data-connectors
+    sandbox-provider: aether-client-sandbox-provider
+    tool-catalog: aether-client-tool-catalog
+    tools-wss-client: aether-client-tools-wss-client
+resources:
+  requests:
+    cpu: 100m
+    memory: 128Mi
+  limits:
+    cpu: '2'
+    memory: 1Gi
+databaseResources:
+  requests:
+    cpu: 100m
+    memory: 256Mi
+  limits:
+    cpu: '2'
+    memory: 1Gi
+roleResources: {}
+quota:
+  enabled: true
+  hard:
+    pods: '64'
+    requests.cpu: '16'
+    limits.cpu: '64'
+    requests.memory: 32Gi
+    limits.memory: 64Gi
+    persistentvolumeclaims: '32'
+    requests.storage: 100Gi
+documentTranscription: false
+embeddingDimensions: 1536
+blobFetchBaseURL: http://storage-download.platform-storage.svc.cluster.local:8080
+trustedServiceImplementations:
+- platform-server
+- platform-bridge
+- memorylayer
+- data-connectors
+- tool-catalog
+- sandbox-provider
+- scitrera-management-plane
+readOnlyKVServices:
+  sparkroute-modelcatalog:
+  - sparkroute/modelcatalog/v1/models/*
+modelCatalog:
+  records: {}
+serviceGrants: []
+toolsWorkspace: default
+existingClaims: {}
+
+blobUploadBaseURL: ""

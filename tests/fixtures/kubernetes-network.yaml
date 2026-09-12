@@ -1,0 +1,65 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: inference-fixture-tenants
+  namespace: platform-shared
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/component: inference
+  policyTypes:
+  - Ingress
+  ingress:
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          platform.scitrera.io/tenant: 'true'
+      podSelector:
+        matchLabels:
+          app.kubernetes.io/component: memorylayer
+    ports:
+    - protocol: TCP
+      port: 8080
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: objects-fixture-web
+  namespace: platform-storage
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/component: objects
+  policyTypes:
+  - Ingress
+  ingress:
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: platform-shared
+      podSelector:
+        matchLabels:
+          app.kubernetes.io/component: web
+    ports:
+    - protocol: TCP
+      port: 9000
+
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: objects-fixture-artifact-upload
+  namespace: platform-storage
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/component: objects
+  policyTypes: [Ingress]
+  ingress:
+  - from:
+    - podSelector:
+        matchLabels:
+          app.kubernetes.io/component: download
+    ports:
+    - protocol: TCP
+      port: 9000

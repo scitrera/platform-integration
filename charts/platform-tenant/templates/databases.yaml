@@ -1,0 +1,69 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: {{ .Release.Name }}-ml-db
+  labels:
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/component: ml-db
+    platform.scitrera.io/trust: service
+  annotations:
+    helm.sh/resource-policy: keep
+spec:
+  instances: {{ .Values.databaseInstances }}
+  imageName: {{ required "images.mlPostgres is required" .Values.images.mlPostgres | quote }}
+  enableSuperuserAccess: false
+  storage:
+    size: {{ .Values.storage.size | quote }}
+    storageClass: {{ .Values.storage.className | quote }}
+  resources:
+{{ toYaml .Values.databaseResources | indent 4 }}
+  bootstrap:
+    initdb:
+      database: memorylayer
+      owner: memorylayer
+      secret:
+        name: {{ index .Values.secrets "mlDatabase" | quote }}
+      postInitApplicationSQL:
+      - CREATE EXTENSION IF NOT EXISTS vector;
+      - CREATE EXTENSION IF NOT EXISTS age;
+      - CREATE EXTENSION IF NOT EXISTS pg_textsearch;
+      - ALTER ROLE memorylayer SET search_path = public, ag_catalog;
+      - ALTER DATABASE memorylayer SET search_path = public, ag_catalog;
+  postgresql:
+    shared_preload_libraries:
+    - pg_textsearch
+    parameters:
+      max_connections: '100'
+---
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: {{ .Release.Name }}-dc-db
+  labels:
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/component: dc-db
+    platform.scitrera.io/trust: service
+  annotations:
+    helm.sh/resource-policy: keep
+spec:
+  instances: {{ .Values.databaseInstances }}
+  imageName: {{ required "images.postgres is required" .Values.images.postgres | quote }}
+  enableSuperuserAccess: false
+  storage:
+    size: {{ .Values.storage.size | quote }}
+    storageClass: {{ .Values.storage.className | quote }}
+  resources:
+{{ toYaml .Values.databaseResources | indent 4 }}
+  bootstrap:
+    initdb:
+      database: dataconnectors
+      owner: dataconnectors
+      secret:
+        name: {{ index .Values.secrets "dcDatabase" | quote }}
+      postInitApplicationSQL:
+      - ALTER ROLE dataconnectors SET search_path = public, ag_catalog;
+      - ALTER DATABASE dataconnectors SET search_path = public, ag_catalog;
+  postgresql:
+    parameters:
+      max_connections: '100'

@@ -1,0 +1,53 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: '{{ .Release.Name }}-provider'
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: '{{ .Release.Name }}-provider'
+rules:
+- apiGroups:
+  - ''
+  resources:
+  - pods
+  - persistentvolumeclaims
+  verbs:
+  - get
+  - list
+  - watch
+  - create
+  - delete
+  - patch
+  - update
+- apiGroups:
+  - ''
+  resources:
+  - pods/exec
+  verbs:
+  - create
+- apiGroups:
+  - coordination.k8s.io
+  resources:
+  - leases
+  verbs:
+  - get
+  - create
+  - update
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: '{{ .Release.Name }}-provider'
+subjects:
+- kind: ServiceAccount
+  name: '{{ .Release.Name }}-provider'
+  namespace: '{{ .Release.Namespace }}'
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: '{{ .Release.Name }}-provider'

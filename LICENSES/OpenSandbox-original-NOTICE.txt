@@ -1,0 +1,31 @@
+Scitrera Sandbox
+Copyright 2026 Scitrera, Inc.
+
+This product includes software developed by Alibaba Group Holding Ltd.
+as part of the OpenSandbox project (https://github.com/alibaba/OpenSandbox).
+
+The following directories contain files copied from OpenSandbox at commit
+a0da39b006336d11e1bfb66b0e281d2251e4ab14 (2026-04-17) and remain subject
+to the Apache License, Version 2.0:
+
+  sandboxes/code-interpreter/       — container image build files
+  components/execd/                 — execution daemon (Go)
+  components/internal/              — shared Go packages used by execd (logger, safego, telemetry, version)
+  specs/execd-api.yaml              — OpenAPI spec for the daemon
+  specs/sandbox-lifecycle.yml       — OpenAPI spec for the lifecycle API
+
+Upstream copyright notice:
+  Copyright 2025 Alibaba Group Holding Ltd.
+  Licensed under the Apache License, Version 2.0 (the "License");
+  See LICENSE for the full text.
+
+The upstream project itself incorporates the following third-party components
+whose licenses apply when distributing built artifacts:
+
+  AkihiroSuda/clone3-workaround v1.0.0
+    https://github.com/AkihiroSuda/clone3-workaround
+    Downloaded at image build time (linux/amd64 only).
+
+Derivative work and additions authored by Scitrera are copyright Scitrera, Inc.
+and are also released under the Apache License, Version 2.0 unless otherwise
+noted in individual files.

@@ -1,0 +1,124 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+{{- if ge (int .Values.phase) 4 }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Release.Name }}-provider
+  labels:
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/component: provider
+    platform.scitrera.io/trust: service
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/instance: {{ .Release.Name }}
+      app.kubernetes.io/component: provider
+      platform.scitrera.io/trust: service
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/instance: {{ .Release.Name }}
+        app.kubernetes.io/component: provider
+        platform.scitrera.io/trust: service
+    spec:
+      serviceAccountName: {{ .Release.Name }}-provider
+      automountServiceAccountToken: true
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
+      terminationGracePeriodSeconds: 30
+      containers:
+      - name: provider
+        image: {{ required "images.provider is required" .Values.images.provider | quote }}
+        imagePullPolicy: IfNotPresent
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop:
+            - ALL
+        resources:
+{{ toYaml (index .Values.roleResources "provider" | default .Values.resources) | indent 10 }}
+        env:
+        - name: AETHER_GATEWAY
+          value: {{ .Release.Name }}-aether:50051
+        - name: AETHER_AUTH
+          value: none
+        - name: AETHER_TLS_ENABLED
+          value: 'true'
+        - name: AETHER_TLS_CA_CERT
+          value: /run/tls/ca.crt
+        - name: AETHER_TLS_CLIENT_CERT
+          value: /run/tls/tls.crt
+        - name: AETHER_TLS_CLIENT_KEY
+          value: /run/tls/tls.key
+        - name: SCITRERA_TENANT
+          value: {{ .Values.tenant }}
+        - name: LOGGING_LEVEL
+          value: INFO
+        - name: AETHER_MAX_RECONNECT_ATTEMPTS
+          value: '0'
+        - name: AETHER_GATEWAY_ADDR
+          value: {{ .Release.Name }}-aether:50051
+        - name: AETHER_SERVER_ADDR
+          value: {{ .Release.Name }}-aether:50051
+        - name: SANDBOX_K8S_SANDBOX_SERVICE_ACCOUNT
+          value: {{ .Release.Name }}-sandbox
+        - name: SANDBOX_K8S_SINGLE_NAMESPACE
+          value: "true"
+        - name: SANDBOX_PROVIDER
+          value: k8s
+        - name: SANDBOX_TENANT_ID
+          value: {{ .Values.tenant }}
+        - name: SANDBOX_K8S_NAMESPACE
+          value: {{ .Release.Namespace }}
+        - name: SANDBOX_K8S_WORKSPACE_VOLUME
+          value: pvc
+        - name: SANDBOX_K8S_STORAGE_CLASS
+          value: {{ .Values.storage.className }}
+        - name: SANDBOX_IMAGE
+          value: {{ required "images.sahara is required" .Values.images.sahara | quote }}
+        - name: SANDBOX_SIDECAR_IMAGE
+          value: {{ required "images.sidecar is required" .Values.images.sidecar | quote }}
+        - name: SANDBOX_SIDECAR_ENABLED
+          value: 'true'
+        - name: SANDBOX_DEFAULT_SANDBOX_CLASS
+          value: standard
+        - name: SANDBOX_SNAPSHOT_LOCAL_DIR
+          value: /data/snapshots
+        - name: SANDBOX_DATA_DIR
+          value: /data/workspaces
+        volumeMounts:
+        - name: anonymous
+          mountPath: /run/anonymous
+          readOnly: true
+        - name: tmp
+          mountPath: /tmp
+        - name: state
+          mountPath: /data
+        - name: tls
+          mountPath: /run/tls
+          readOnly: true
+        envFrom:
+        - secretRef:
+            name: {{ index .Values.secrets "provider" | quote }}
+      volumes:
+      - name: anonymous
+        secret:
+          secretName: {{ index .Values.secrets.tls "anonymous" | quote }}
+      - name: tmp
+        emptyDir: {}
+      - name: state
+        persistentVolumeClaim:
+          claimName: {{ index .Values.existingClaims "provider" | default (printf "%s-provider-state" .Release.Name) | quote }}
+      - name: tls
+        secret:
+          secretName: {{ index .Values.secrets.tls "sandbox-provider" | quote }}
+{{- end }}

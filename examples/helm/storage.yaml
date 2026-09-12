@@ -1,0 +1,12 @@
+# Replace placeholders with operator-selected artifacts and existing Secret references.
+development: false
+phase: 0
+bootstrapRevision: '1'
+images:
+  postgres: registry.example.invalid/postgres:REPLACE@sha256:REPLACE
+  edge: registry.example.invalid/edge:REPLACE@sha256:REPLACE
+  blobgw: registry.example.invalid/blobgw:REPLACE@sha256:REPLACE
+  web: registry.example.invalid/web:REPLACE@sha256:REPLACE
+storage:
+  className: REPLACE
+  size: 10Gi

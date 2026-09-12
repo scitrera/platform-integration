@@ -1,0 +1,11 @@
+{
+  "tenant": ["X-Scitrera-Tenant"],
+  "user": ["X-Scitrera-User"],
+  "source": ["X-Scitrera-Source"],
+  "workspace": ["X-Scitrera-Workspace"],
+  "thread_id": ["X-Scitrera-Thread-Id"],
+  "task_id": ["X-Scitrera-Task-Id"],
+  "experiment": ["X-Scitrera-Experiment"],
+  "session": ["X-Scitrera-Session"],
+  "mlflow_experiment_id": ["X-MLflow-Experiment-Id"]
+}

@@ -1,0 +1,8 @@
+apiVersion: v2
+name: platform-storage
+version: 0.1.0
+type: application
+description: Scitrera storage integration release
+appVersion: candidate-2026-09-11
+kubeVersion: '>=1.34.0-0 <1.35.0-0'
+dependencies: []

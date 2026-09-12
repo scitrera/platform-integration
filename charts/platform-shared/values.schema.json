@@ -1,0 +1,253 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "bootstrapRevision": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9-]{0,30}$"
+    },
+    "tenant": {
+      "type": "string"
+    },
+    "publicOrigin": {
+      "type": "string"
+    },
+    "adminOrigin": {
+      "type": "string"
+    },
+    "hostname": {
+      "type": "string"
+    },
+    "tlsSecret": {
+      "type": "string"
+    },
+    "gatewayClass": {
+      "type": "string"
+    },
+    "dnsResolver": {
+      "type": "string"
+    },
+    "phase": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 4
+    },
+    "development": {
+      "type": "boolean"
+    },
+    "images": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "secrets": {
+      "type": "object"
+    },
+    "resources": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "requests": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "limits": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    },
+    "storage": {
+      "type": "object",
+      "required": [
+        "size",
+        "className"
+      ],
+      "properties": {
+        "size": {
+          "type": "string",
+          "pattern": "^[1-9][0-9]*(Gi|Ti)$"
+        },
+        "className": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "databaseInstances": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 3
+    },
+    "tenants": {
+      "type": "array"
+    },
+    "clusterDomain": {
+      "type": "string",
+      "minLength": 1
+    },
+    "storageEdgeEndpoint": {
+      "type": "string",
+      "pattern": "^https?://"
+    },
+    "uploadProxy": {
+      "type": "object",
+      "required": [
+        "enabled",
+        "endpoint",
+        "signedHost"
+      ],
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "endpoint": {
+          "type": "string"
+        },
+        "signedHost": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "storageNamespace": {
+      "type": "string",
+      "minLength": 1
+    },
+    "databaseResources": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "requests": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "limits": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    },
+    "roleResources": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "requests": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "limits": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        }
+      }
+    },
+    "modelCatalog": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "addressTemplate": {
+          "type": "string"
+        },
+        "serverNameTemplate": {
+          "type": "string"
+        },
+        "allowedProviderHosts": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "credentialSecretNames": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "allowHTTP": {
+          "type": "boolean"
+        },
+        "apiEgress": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "cidr",
+              "port"
+            ],
+            "properties": {
+              "cidr": {
+                "type": "string"
+              },
+              "port": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 65535
+              }
+            }
+          }
+        }
+      }
+    },
+    "existingClaims": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "sessions": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 63,
+          "pattern": "^[a-z0-9]([a-z0-9-]*[a-z0-9])?$"
+        }
+      }
+    }
+  },
+  "required": [
+    "phase",
+    "development",
+    "bootstrapRevision",
+    "tenant",
+    "databaseInstances",
+    "publicOrigin",
+    "adminOrigin",
+    "hostname",
+    "tlsSecret",
+    "gatewayClass",
+    "dnsResolver",
+    "tenants",
+    "storage",
+    "resources",
+    "images",
+    "secrets"
+  ]
+}

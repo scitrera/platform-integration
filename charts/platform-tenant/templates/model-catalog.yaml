@@ -1,0 +1,75 @@
+{{- if ge (int .Values.phase) 3 }}
+{{- range $name, $record := .Values.modelCatalog.records }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ $.Release.Name }}-model-{{ $name }}
+data:
+  record.json: {{ $record | toJson | quote }}
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ $.Release.Name }}-model-{{ $name }}-{{ $.Values.bootstrapRevision }}
+spec:
+  backoffLimit: 2
+  activeDeadlineSeconds: 180
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/instance: {{ $.Release.Name }}
+        app.kubernetes.io/component: model-catalog
+        platform.scitrera.io/trust: service
+    spec:
+      serviceAccountName: {{ $.Release.Name }}-runtime
+      automountServiceAccountToken: false
+      restartPolicy: Never
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+      - name: publish
+        image: {{ required "images.sparkroute is required for catalog publishing" $.Values.images.sparkroute | quote }}
+        args:
+        - catalog
+        - publish
+        - --address
+        - {{ $.Release.Name }}-aether:50051
+        - --server-name
+        - {{ $.Release.Name }}-aether
+        - --implementation
+        - scitrera-management-plane
+        - --specifier
+        - catalog-publisher-{{ $name }}
+        - --ca
+        - /run/tls/ca.crt
+        - --cert
+        - /run/tls/tls.crt
+        - --key
+        - /run/tls/tls.key
+        - --record
+        - /catalog/record.json
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop: [ALL]
+        resources:
+{{ toYaml $.Values.resources | indent 10 }}
+        volumeMounts:
+        - {name: tls, mountPath: /run/tls, readOnly: true}
+        - {name: record, mountPath: /catalog, readOnly: true}
+      volumes:
+      - name: tls
+        secret:
+          secretName: {{ index $.Values.secrets.tls "management" | quote }}
+      - name: record
+        configMap:
+          name: {{ $.Release.Name }}-model-{{ $name }}
+{{- end }}
+{{- end }}

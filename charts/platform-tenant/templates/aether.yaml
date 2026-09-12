@@ -1,0 +1,142 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+{{- if ge (int .Values.phase) 0 }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Release.Name }}-aether
+  labels:
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/component: aether
+    platform.scitrera.io/trust: service
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/instance: {{ .Release.Name }}
+      app.kubernetes.io/component: aether
+      platform.scitrera.io/trust: service
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/instance: {{ .Release.Name }}
+        app.kubernetes.io/component: aether
+        platform.scitrera.io/trust: service
+    spec:
+      serviceAccountName: {{ .Release.Name }}-runtime
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
+      terminationGracePeriodSeconds: 30
+      containers:
+      - name: aether
+        image: {{ required "images.aether is required" .Values.images.aether | quote }}
+        imagePullPolicy: IfNotPresent
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop:
+            - ALL
+        resources:
+{{ toYaml (index .Values.roleResources "aether" | default .Values.resources) | indent 10 }}
+        env:
+        - name: AETHERLITE_AUTH_VERIFY_LISTEN
+          value: ":8082"
+        - name: AETHER_TENANT_ID
+          value: {{ .Values.tenant }}
+        volumeMounts:
+        - name: tmp
+          mountPath: /tmp
+        - name: data
+          mountPath: /data
+        - name: config
+          mountPath: /etc/aether/config.yaml
+          subPath: aether.yaml
+          readOnly: true
+        - name: tls
+          mountPath: /run/tls
+          readOnly: true
+        command:
+        - aetherlite
+        args:
+        - -config
+        - /etc/aether/config.yaml
+        - -data-dir
+        - /data
+        envFrom:
+        - secretRef:
+            name: {{ index .Values.secrets "aether" | quote }}
+        readinessProbe:
+          httpGet: &id001
+            path: /health/ready
+            port: 9090
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 6
+        startupProbe:
+          httpGet: *id001
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 60
+        livenessProbe:
+          httpGet: *id001
+          periodSeconds: 15
+          timeoutSeconds: 3
+          failureThreshold: 6
+      volumes:
+      - name: tmp
+        emptyDir: {}
+      - name: data
+        persistentVolumeClaim:
+          claimName: {{ index .Values.existingClaims "aether" | default (printf "%s-aether-state" .Release.Name) | quote }}
+      - name: config
+        configMap:
+          name: {{ .Release.Name }}-bootstrap
+      - name: tls
+        secret:
+          secretName: {{ index .Values.secrets.tls "server" | quote }}
+{{- end }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .Release.Name }}-aether
+  labels:
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/component: aether
+    platform.scitrera.io/trust: service
+spec:
+  selector:
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/component: aether
+    platform.scitrera.io/trust: service
+  ports:
+  - name: grpc
+    port: 50051
+    targetPort: 50051
+  - name: auth-verify
+    port: 8082
+    targetPort: 8082
+  - name: ops
+    port: 9090
+    targetPort: 9090
+
+---
+# Stable service name for tenant catalog discovery, independent of release name.
+apiVersion: v1
+kind: Service
+metadata:
+  name: aether-gateway
+spec:
+  selector:
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/component: aether
+  ports:
+  - {name: grpc, port: 50051, targetPort: 50051}

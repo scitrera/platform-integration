@@ -1,0 +1,288 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "tenant": {
+      "type": "string"
+    },
+    "bootstrapRevision": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9-]{0,30}$"
+    },
+    "sharedNamespace": {
+      "type": "string"
+    },
+    "storageNamespace": {
+      "type": "string"
+    },
+    "publicOrigin": {
+      "type": "string"
+    },
+    "adminEmail": {
+      "type": "string"
+    },
+    "phase": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 4
+    },
+    "development": {
+      "type": "boolean"
+    },
+    "images": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "secrets": {
+      "type": "object"
+    },
+    "resources": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "requests": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "limits": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    },
+    "storage": {
+      "type": "object",
+      "required": [
+        "size",
+        "className"
+      ],
+      "properties": {
+        "size": {
+          "type": "string",
+          "pattern": "^[1-9][0-9]*(Gi|Ti)$"
+        },
+        "className": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "databaseInstances": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 3
+    },
+    "seedDevelopmentAdmin": {
+      "type": "boolean"
+    },
+    "databaseResources": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "requests": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "limits": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    },
+    "roleResources": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "requests": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "limits": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        }
+      }
+    },
+    "quota": {
+      "type": "object",
+      "required": [
+        "enabled",
+        "hard"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "hard": {
+          "type": "object",
+          "minProperties": 1,
+          "additionalProperties": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    },
+    "documentTranscription": {
+      "type": "boolean"
+    },
+    "embeddingDimensions": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 2000
+    },
+    "blobFetchBaseURL": {
+      "type": "string",
+      "pattern": "^https?://[^?#]+$"
+    },
+    "trustedServiceImplementations": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "pattern": "^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,127}$"
+      }
+    },
+    "readOnlyKVServices": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "array",
+        "items": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "modelCatalog": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "records": {
+          "type": "object",
+          "propertyNames": {
+            "pattern": "^[a-z0-9][a-z0-9-]{0,30}$"
+          },
+          "additionalProperties": {
+            "type": "object"
+          }
+        }
+      }
+    },
+    "toolsWorkspace": {
+      "type": "string",
+      "minLength": 1
+    },
+    "serviceGrants": {
+      "type": "array",
+      "maxItems": 128,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "principal_id",
+          "resource_type",
+          "resource_id",
+          "access_level"
+        ],
+        "properties": {
+          "principal_id": {
+            "type": "string",
+            "pattern": "^sv::[a-zA-Z0-9][a-zA-Z0-9_.-]{0,127}::[a-zA-Z0-9_.*-]+$"
+          },
+          "resource_type": {
+            "enum": [
+              "capability",
+              "service_impl",
+              "workspace",
+              "kv_key"
+            ]
+          },
+          "resource_id": {
+            "type": "string",
+            "minLength": 1,
+            "pattern": "^[^*?]"
+          },
+          "access_level": {
+            "enum": [
+              0,
+              10,
+              20,
+              30
+            ]
+          }
+        }
+      }
+    },
+    "existingClaims": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "aether": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 63,
+          "pattern": "^[a-z0-9]([a-z0-9-]*[a-z0-9])?$"
+        },
+        "memorylayer": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 63,
+          "pattern": "^[a-z0-9]([a-z0-9-]*[a-z0-9])?$"
+        },
+        "provider": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 63,
+          "pattern": "^[a-z0-9]([a-z0-9-]*[a-z0-9])?$"
+        }
+      }
+    },
+    "blobUploadBaseURL": {
+      "type": "string",
+      "pattern": "^$|^https?://[^?#]+$"
+    }
+  },
+  "required": [
+    "tenant",
+    "phase",
+    "development",
+    "bootstrapRevision",
+    "sharedNamespace",
+    "storageNamespace",
+    "publicOrigin",
+    "adminEmail",
+    "seedDevelopmentAdmin",
+    "databaseInstances",
+    "storage",
+    "images",
+    "secrets",
+    "resources"
+  ]
+}

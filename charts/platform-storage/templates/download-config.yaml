@@ -1,0 +1,9 @@
+{{- if ge (int .Values.phase) 1 }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ .Release.Name }}-download
+data:
+  nginx.conf: |
+{{ tpl (.Files.Get "files/download-nginx.conf") . | indent 4 }}
+{{- end }}

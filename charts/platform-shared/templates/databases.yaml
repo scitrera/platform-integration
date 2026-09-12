@@ -1,0 +1,64 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: {{ .Release.Name }}-auth-db
+  labels:
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/component: auth-db
+    platform.scitrera.io/trust: service
+  annotations:
+    helm.sh/resource-policy: keep
+spec:
+  instances: {{ .Values.databaseInstances }}
+  imageName: {{ required "images.postgres is required" .Values.images.postgres | quote }}
+  enableSuperuserAccess: false
+  storage:
+    size: {{ .Values.storage.size | quote }}
+    storageClass: {{ .Values.storage.className | quote }}
+  resources:
+{{ toYaml .Values.databaseResources | indent 4 }}
+  bootstrap:
+    initdb:
+      database: auth
+      owner: auth
+      secret:
+        name: {{ index .Values.secrets "authDatabase" | quote }}
+      postInitApplicationSQL:
+      - ALTER ROLE auth SET search_path = public, ag_catalog;
+      - ALTER DATABASE auth SET search_path = public, ag_catalog;
+  postgresql:
+    parameters:
+      max_connections: '100'
+---
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: {{ .Release.Name }}-gateway-db
+  labels:
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/component: gateway-db
+    platform.scitrera.io/trust: service
+  annotations:
+    helm.sh/resource-policy: keep
+spec:
+  instances: {{ .Values.databaseInstances }}
+  imageName: {{ required "images.postgres is required" .Values.images.postgres | quote }}
+  enableSuperuserAccess: false
+  storage:
+    size: {{ .Values.storage.size | quote }}
+    storageClass: {{ .Values.storage.className | quote }}
+  resources:
+{{ toYaml .Values.databaseResources | indent 4 }}
+  bootstrap:
+    initdb:
+      database: sparkroute
+      owner: sparkroute
+      secret:
+        name: {{ index .Values.secrets "gatewayDatabase" | quote }}
+      postInitApplicationSQL:
+      - ALTER ROLE sparkroute SET search_path = public, ag_catalog;
+      - ALTER DATABASE sparkroute SET search_path = public, ag_catalog;
+  postgresql:
+    parameters:
+      max_connections: '100'

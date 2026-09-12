@@ -1,0 +1,29 @@
+# Replace placeholders with operator-selected artifacts and existing Secret references.
+development: false
+phase: 0
+bootstrapRevision: '1'
+images:
+  auth: registry.example.invalid/auth:REPLACE@sha256:REPLACE
+  web: registry.example.invalid/web:REPLACE@sha256:REPLACE
+  sparkroute: registry.example.invalid/sparkroute:REPLACE@sha256:REPLACE
+  postgres: registry.example.invalid/postgres:REPLACE@sha256:REPLACE
+  valkey: registry.example.invalid/valkey:REPLACE@sha256:REPLACE
+storage:
+  className: REPLACE
+  size: 10Gi
+publicOrigin: https://platform.example.test
+adminOrigin: https://auth-admin.example.test
+hostname: platform.example.test
+dnsResolver: REPLACE
+tenants:
+- id: example
+  namespace: tenant-example
+  release: example
+modelCatalog:
+  allowedProviderHosts:
+  - provider.example.test
+  credentialSecretNames:
+  - aether-sparkroute-creds-example
+  apiEgress:
+  - cidr: REPLACE
+    port: 6443

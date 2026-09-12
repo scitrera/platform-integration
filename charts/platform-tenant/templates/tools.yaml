@@ -1,0 +1,76 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+{{- if ge (int .Values.phase) 4 }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Release.Name }}-tools
+  labels: {app.kubernetes.io/instance: "{{ .Release.Name }}", app.kubernetes.io/component: tools}
+spec:
+  replicas: 1
+  strategy: {type: Recreate}
+  selector:
+    matchLabels: {app.kubernetes.io/instance: "{{ .Release.Name }}", app.kubernetes.io/component: tools}
+  template:
+    metadata:
+      labels: {app.kubernetes.io/instance: "{{ .Release.Name }}", app.kubernetes.io/component: tools, platform.scitrera.io/trust: service}
+    spec:
+      serviceAccountName: {{ .Release.Name }}-runtime
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+        seccompProfile: {type: RuntimeDefault}
+      terminationGracePeriodSeconds: 30
+      containers:
+      - name: tools
+        image: {{ required "images.tools is required" .Values.images.tools | quote }}
+        imagePullPolicy: IfNotPresent
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities: {drop: [ALL]}
+        resources:
+{{ toYaml (index .Values.roleResources "tools" | default .Values.resources) | indent 10 }}
+        env:
+        - {name: AETHER_GATEWAY, value: "{{ .Release.Name }}-aether:50051"}
+        - {name: AETHER_TLS_ENABLED, value: "true"}
+        - {name: AETHER_TLS_CA_CERT, value: /run/tls/ca.crt}
+        - {name: AETHER_TLS_CLIENT_CERT, value: /run/tls/tls.crt}
+        - {name: AETHER_TLS_CLIENT_KEY, value: /run/tls/tls.key}
+        - {name: AETHER_USER_TLS_CLIENT_CERT, value: /run/user-tls/tls.crt}
+        - {name: AETHER_USER_TLS_CLIENT_KEY, value: /run/user-tls/tls.key}
+        - {name: TOOLS_WSS_AUTH_PROXY_URL, value: "http://{{ .Release.Name }}-aether:8082"}
+        - {name: TOOLS_WSS_AUTH_WORKSPACE, value: {{ .Values.toolsWorkspace | quote }}}
+        - {name: TOOLS_WSS_REGISTRY_WORKSPACE, value: {{ .Values.toolsWorkspace | quote }}}
+        - {name: TOOLS_WSS_ALLOWED_ORIGINS, value: {{ .Values.publicOrigin | quote }}}
+        - {name: SCITRERA_TOOL_HOST_ACCESS_POLICY, value: private}
+        - {name: LOG_LEVEL, value: info}
+        volumeMounts:
+        - {name: tls, mountPath: /run/tls, readOnly: true}
+        - {name: user-tls, mountPath: /run/user-tls, readOnly: true}
+        readinessProbe:
+          httpGet: {path: /healthz, port: 8090}
+          periodSeconds: 5
+        livenessProbe:
+          httpGet: {path: /healthz, port: 8090}
+          periodSeconds: 15
+        startupProbe:
+          httpGet: {path: /healthz, port: 8090}
+          periodSeconds: 5
+          failureThreshold: 30
+      volumes:
+      - name: tls
+        secret: {secretName: {{ index .Values.secrets.tls "tools-wss-client" | quote }}}
+      - name: user-tls
+        secret: {secretName: {{ index .Values.secrets.tls "anonymous" | quote }}}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .Release.Name }}-tools
+spec:
+  selector: {app.kubernetes.io/instance: "{{ .Release.Name }}", app.kubernetes.io/component: tools}
+  ports: [{name: websocket, port: 8090, targetPort: 8090}]
+{{- end }}

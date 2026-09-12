@@ -1,0 +1,74 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+{{- if ge (int .Values.phase) 1 }}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ .Release.Name }}-ml-migrate-{{ .Values.bootstrapRevision }}
+  labels:
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/component: ml-migrate-{{ .Values.bootstrapRevision }}
+    platform.scitrera.io/trust: service
+spec:
+  backoffLimit: 1
+  activeDeadlineSeconds: 360
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/instance: {{ .Release.Name }}
+        app.kubernetes.io/component: ml-migrate
+        platform.scitrera.io/trust: service
+    spec:
+      serviceAccountName: {{ .Release.Name }}-runtime
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
+      terminationGracePeriodSeconds: 30
+      containers:
+      - name: ml-migrate
+        image: {{ required "images.memorylayer is required" .Values.images.memorylayer | quote }}
+        imagePullPolicy: IfNotPresent
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop:
+            - ALL
+        resources:
+{{ toYaml (index .Values.roleResources "ml-migrate" | default .Values.resources) | indent 10 }}
+        env:
+        - name: MEMORYLAYER_EMBEDDING_DIMENSIONS
+          value: {{ .Values.embeddingDimensions | quote }}
+        - name: MEMORYLAYER_DATA_DIR
+          value: /tmp
+        - name: STATEFUL_ROOT
+          value: /tmp/state
+        - name: XDG_CONFIG_HOME
+          value: /tmp/config
+        - name: MEMORYLAYER_AUTO_MIGRATE
+          value: '1'
+        volumeMounts:
+        - name: tmp
+          mountPath: /tmp
+        - name: bootstrap
+          mountPath: /integration
+          readOnly: true
+        command:
+        - python
+        args:
+        - /integration/memorylayer_migrate.py
+        envFrom:
+        - secretRef:
+            name: {{ index .Values.secrets "memorylayer" | quote }}
+      volumes:
+      - name: tmp
+        emptyDir: {}
+      - name: bootstrap
+        configMap:
+          name: {{ .Release.Name }}-bootstrap
+      restartPolicy: Never
+{{- end }}

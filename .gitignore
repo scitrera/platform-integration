@@ -1,0 +1,11 @@
+.local/
+.deps/
+__pycache__/
+.pytest_cache/
+dist/
+*.tgz
+.env
+
+node_modules/
+playwright-report/
+test-results/

@@ -1,0 +1,113 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+{{- if ge (int .Values.phase) 2 }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Release.Name }}-web
+  labels:
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/component: web
+    platform.scitrera.io/trust: service
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/instance: {{ .Release.Name }}
+      app.kubernetes.io/component: web
+      platform.scitrera.io/trust: service
+  template:
+    metadata:
+      annotations:
+        checksum/web-config: {{ include (print $.Template.BasePath "/web-config.yaml") . | sha256sum }}
+      labels:
+        app.kubernetes.io/instance: {{ .Release.Name }}
+        app.kubernetes.io/component: web
+        platform.scitrera.io/trust: service
+    spec:
+      serviceAccountName: {{ .Release.Name }}-runtime
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
+      terminationGracePeriodSeconds: 30
+      containers:
+      - name: web
+        image: {{ required "images.web is required" .Values.images.web | quote }}
+        imagePullPolicy: IfNotPresent
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop:
+            - ALL
+        resources:
+{{ toYaml (index .Values.roleResources "web" | default .Values.resources) | indent 10 }}
+        env: []
+        volumeMounts:
+        - name: tmp
+          mountPath: /tmp
+        - name: config
+          mountPath: /etc/nginx/nginx.conf
+          subPath: nginx.conf
+          readOnly: true
+        - name: cache
+          mountPath: /var/cache/nginx
+        - name: run
+          mountPath: /var/run
+        command:
+        - nginx
+        args:
+        - -g
+        - daemon off;
+        readinessProbe:
+          httpGet: &id001
+            path: /healthz
+            port: 8080
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 6
+        startupProbe:
+          httpGet: *id001
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 60
+        livenessProbe:
+          httpGet: *id001
+          periodSeconds: 15
+          timeoutSeconds: 3
+          failureThreshold: 6
+      volumes:
+      - name: tmp
+        emptyDir: {}
+      - name: config
+        configMap:
+          name: {{ .Release.Name }}-web
+      - name: cache
+        emptyDir: {}
+      - name: run
+        emptyDir: {}
+{{- end }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .Release.Name }}-web
+  labels:
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/component: web
+    platform.scitrera.io/trust: service
+spec:
+  selector:
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/component: web
+    platform.scitrera.io/trust: service
+  ports:
+  - name: http
+    port: 8080
+    targetPort: 8080

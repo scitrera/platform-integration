@@ -1,0 +1,69 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+{{- if ge (int .Values.phase) 1 }}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ .Release.Name }}-dc-migrate-{{ .Values.bootstrapRevision }}
+  labels:
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/component: dc-migrate-{{ .Values.bootstrapRevision }}
+    platform.scitrera.io/trust: service
+spec:
+  backoffLimit: 1
+  activeDeadlineSeconds: 360
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/instance: {{ .Release.Name }}
+        app.kubernetes.io/component: dc-migrate
+        platform.scitrera.io/trust: service
+    spec:
+      serviceAccountName: {{ .Release.Name }}-runtime
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
+      terminationGracePeriodSeconds: 30
+      containers:
+      - name: dc-migrate
+        image: {{ required "images.connectors is required" .Values.images.connectors | quote }}
+        imagePullPolicy: IfNotPresent
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop:
+            - ALL
+        resources:
+{{ toYaml (index .Values.roleResources "dc-migrate" | default .Values.resources) | indent 10 }}
+        env:
+        - name: STATEFUL_ROOT
+          value: /tmp/state
+        - name: XDG_CONFIG_HOME
+          value: /tmp/config
+        volumeMounts:
+        - name: tmp
+          mountPath: /tmp
+        - name: bootstrap
+          mountPath: /integration
+          readOnly: true
+        command:
+        - python
+        - -c
+        args:
+        - from data_connectors.db.engine import run_migrations; run_migrations()
+        envFrom:
+        - secretRef:
+            name: {{ index .Values.secrets "connectors" | quote }}
+      volumes:
+      - name: tmp
+        emptyDir: {}
+      - name: bootstrap
+        configMap:
+          name: {{ .Release.Name }}-bootstrap
+      restartPolicy: Never
+{{- end }}

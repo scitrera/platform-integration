@@ -1,0 +1,10 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+{{- if .Values.quota.enabled }}
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: {{ .Release.Name }}-quota
+spec:
+  hard:
+{{ toYaml .Values.quota.hard | indent 4 }}
+{{- end }}

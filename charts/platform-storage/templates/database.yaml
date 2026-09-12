@@ -1,0 +1,32 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: {{ .Release.Name }}-db
+  labels:
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/component: db
+    platform.scitrera.io/trust: service
+  annotations:
+    helm.sh/resource-policy: keep
+spec:
+  instances: {{ .Values.databaseInstances }}
+  imageName: {{ required "images.postgres is required" .Values.images.postgres | quote }}
+  enableSuperuserAccess: false
+  storage:
+    size: {{ .Values.storage.size | quote }}
+    storageClass: {{ .Values.storage.className | quote }}
+  resources:
+{{ toYaml .Values.databaseResources | indent 4 }}
+  bootstrap:
+    initdb:
+      database: storage
+      owner: storage
+      secret:
+        name: {{ index .Values.secrets "database" | quote }}
+      postInitApplicationSQL:
+      - ALTER ROLE storage SET search_path = public, ag_catalog;
+      - ALTER DATABASE storage SET search_path = public, ag_catalog;
+  postgresql:
+    parameters:
+      max_connections: '100'

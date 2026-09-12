@@ -1,0 +1,124 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+{{- if ge (int .Values.phase) 1 }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Release.Name }}-edge
+  labels:
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/component: edge
+    platform.scitrera.io/trust: service
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/instance: {{ .Release.Name }}
+      app.kubernetes.io/component: edge
+      platform.scitrera.io/trust: service
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/instance: {{ .Release.Name }}
+        app.kubernetes.io/component: edge
+        platform.scitrera.io/trust: service
+    spec:
+      serviceAccountName: {{ .Release.Name }}-runtime
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
+      terminationGracePeriodSeconds: 30
+      containers:
+      - name: edge
+        image: {{ required "images.edge is required" .Values.images.edge | quote }}
+        imagePullPolicy: IfNotPresent
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop:
+            - ALL
+        resources:
+{{ toYaml (index .Values.roleResources "edge" | default .Values.resources) | indent 10 }}
+        env: []
+        volumeMounts:
+        - name: tmp
+          mountPath: /tmp
+        - name: files
+          mountPath: /run/storage
+          readOnly: true
+        args:
+        - -addr
+        - :8090
+        - -backend
+        - s3
+        - -index
+        - postgres
+        - -policy
+        - postgres
+        - -tenant-config
+        - /run/storage/tenants.json
+        - -tenant-secrets-file
+        - /run/storage/credentials.json
+        - -staging
+        - s3
+        - -staging-bucket
+        - staging
+        - -s3-endpoint
+        - $(S3_ENDPOINT)
+        - -s3-force-path-style
+        - -key-seed-hex
+        - $(EDGE_SIGNING_SEED)
+        - -default-require-auth
+        - -gc-interval
+        - '0'
+        envFrom:
+        - secretRef:
+            name: {{ index .Values.secrets "storage" | quote }}
+        readinessProbe:
+          tcpSocket: &id001
+            port: 8090
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 6
+        startupProbe:
+          tcpSocket: *id001
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 60
+        livenessProbe:
+          tcpSocket: *id001
+          periodSeconds: 15
+          timeoutSeconds: 3
+          failureThreshold: 6
+      volumes:
+      - name: tmp
+        emptyDir: {}
+      - name: files
+        secret:
+          secretName: {{ .Values.secrets.files | quote }}
+{{- end }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .Release.Name }}-edge
+  labels:
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/component: edge
+    platform.scitrera.io/trust: service
+spec:
+  selector:
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/component: edge
+    platform.scitrera.io/trust: service
+  ports:
+  - name: http
+    port: 8090
+    targetPort: 8090

@@ -1,0 +1,97 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+{{- if ge (int .Values.phase) 1 }}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ .Release.Name }}-acl-{{ .Values.bootstrapRevision }}
+  labels:
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/component: acl-{{ .Values.bootstrapRevision }}
+    platform.scitrera.io/trust: service
+spec:
+  backoffLimit: 1
+  activeDeadlineSeconds: 360
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/instance: {{ .Release.Name }}
+        app.kubernetes.io/component: acl
+        platform.scitrera.io/trust: service
+    spec:
+      serviceAccountName: {{ .Release.Name }}-runtime
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
+      terminationGracePeriodSeconds: 30
+      containers:
+      - name: acl
+        image: {{ required "images.backend is required" .Values.images.backend | quote }}
+        imagePullPolicy: IfNotPresent
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop:
+            - ALL
+        resources:
+{{ toYaml (index .Values.roleResources "acl" | default .Values.resources) | indent 10 }}
+        env:
+        - name: AETHER_GATEWAY
+          value: {{ .Release.Name }}-aether:50051
+        - name: AETHER_AUTH
+          value: none
+        - name: AETHER_TLS_ENABLED
+          value: 'true'
+        - name: AETHER_TLS_CA_CERT
+          value: /run/tls/ca.crt
+        - name: AETHER_TLS_CLIENT_CERT
+          value: /run/tls/tls.crt
+        - name: AETHER_TLS_CLIENT_KEY
+          value: /run/tls/tls.key
+        - name: SCITRERA_TENANT
+          value: {{ .Values.tenant }}
+        - name: LOGGING_LEVEL
+          value: INFO
+        - name: TENANT_ID
+          value: {{ .Values.tenant }}
+        - name: ACL_TRUSTED_SERVICE_IMPLEMENTATIONS
+          value: {{ join "," .Values.trustedServiceImplementations | quote }}
+        - name: ACL_READ_ONLY_KV_SERVICES
+          value: {{ .Values.readOnlyKVServices | toJson | quote }}
+        - name: ACL_SERVICE_GRANTS
+          value: {{ .Values.serviceGrants | toJson | quote }}
+        - name: ACL_SEED_PHASE
+          value: acl
+        - name: MINT_ORCH_IMPL
+          value: default
+        - name: MINT_ORCH_SPEC
+          value: bootstrap
+        volumeMounts:
+        - name: tmp
+          mountPath: /tmp
+        - name: bootstrap
+          mountPath: /integration
+          readOnly: true
+        - name: tls
+          mountPath: /run/tls
+          readOnly: true
+        command:
+        - python
+        - -m
+        - x_acl_seed
+      volumes:
+      - name: tmp
+        emptyDir: {}
+      - name: bootstrap
+        configMap:
+          name: {{ .Release.Name }}-bootstrap
+      - name: tls
+        secret:
+          secretName: {{ index .Values.secrets.tls "orchestrator" | quote }}
+      restartPolicy: Never
+{{- end }}

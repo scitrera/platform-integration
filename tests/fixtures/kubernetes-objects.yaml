@@ -1,0 +1,145 @@
+# Disposable S3 fixture only; production supplies durable object storage.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: objects-fixture
+  namespace: platform-storage
+spec:
+  accessModes:
+  - ReadWriteOnce
+  storageClassName: standard
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: objects
+  namespace: platform-storage
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels: &id001
+      app.kubernetes.io/component: objects
+      platform.scitrera.io/trust: service
+  template:
+    metadata:
+      labels: *id001
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+      - name: objects
+        image: platform-integration/minio:14cea493d9a34af3
+        args:
+        - server
+        - /data
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop:
+            - ALL
+        envFrom:
+        - secretRef:
+            name: objects-env
+        volumeMounts:
+        - name: data
+          mountPath: /data
+        - name: tmp
+          mountPath: /tmp
+        readinessProbe:
+          httpGet:
+            path: /minio/health/ready
+            port: 9000
+          periodSeconds: 3
+        resources:
+          requests:
+            cpu: 100m
+            memory: 128Mi
+          limits:
+            cpu: '1'
+            memory: 512Mi
+      volumes:
+      - name: data
+        persistentVolumeClaim:
+          claimName: objects-fixture
+      - name: tmp
+        emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: objects
+  namespace: platform-storage
+spec:
+  selector:
+    app.kubernetes.io/component: objects
+    platform.scitrera.io/trust: service
+  ports:
+  - port: 9000
+    targetPort: 9000
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: objects-init-fixture-2
+  namespace: platform-storage
+spec:
+  backoffLimit: 2
+  activeDeadlineSeconds: 180
+  template:
+    metadata:
+      labels:
+        platform.scitrera.io/trust: service
+        app.kubernetes.io/component: objects-init
+    spec:
+      restartPolicy: Never
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+      - name: init
+        image: platform-integration/mc:a7fe349ef4bd8521
+        command:
+        - /bin/sh
+        - -ec
+        args:
+        - 'mc alias set local http://objects:9000 "$MINIO_ROOT_USER" "$MINIO_ROOT_PASSWORD"
+          >/dev/null
+
+          mc ready local
+
+          mc mb --ignore-existing local/tenant-alpha local/tenant-beta local/staging'
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop:
+            - ALL
+        env:
+        - name: MC_CONFIG_DIR
+          value: /tmp/mc
+        envFrom:
+        - secretRef:
+            name: objects-env
+        volumeMounts:
+        - name: tmp
+          mountPath: /tmp
+      volumes:
+      - name: tmp
+        emptyDir: {}

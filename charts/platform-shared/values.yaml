@@ -1,0 +1,60 @@
+phase: 0
+development: false
+bootstrapRevision: '1'
+tenant: shared
+databaseInstances: 1
+publicOrigin: https://platform.example.test
+adminOrigin: https://auth-admin.example.test
+hostname: platform.example.test
+tlsSecret: platform-public-tls
+gatewayClass: envoy
+dnsResolver: 10.96.0.10
+tenants: []
+storage:
+  className: ''
+  size: 10Gi
+resources:
+  requests:
+    cpu: 100m
+    memory: 128Mi
+  limits:
+    cpu: '2'
+    memory: 1Gi
+images:
+  auth: ''
+  web: ''
+  sparkroute: ''
+  postgres: ''
+  valkey: ''
+secrets:
+  authDatabase: auth-db
+  gatewayDatabase: gateway-db
+  auth: auth-env
+  oauth: oauth-env
+  operators: auth-operators
+  gateway: gateway-env
+  gatewayFiles: gateway-files
+clusterDomain: cluster.local
+storageEdgeEndpoint: http://storage-edge.platform-storage.svc.cluster.local:8090
+uploadProxy:
+  enabled: false
+  endpoint: ''
+  signedHost: ''
+storageNamespace: platform-storage
+databaseResources:
+  requests:
+    cpu: 100m
+    memory: 256Mi
+  limits:
+    cpu: '2'
+    memory: 1Gi
+roleResources: {}
+modelCatalog:
+  enabled: true
+  addressTemplate: aether-gateway.tenant-{tenant}.svc.cluster.local:50051
+  serverNameTemplate: '{tenant}-aether'
+  allowedProviderHosts: []
+  allowHTTP: false
+  credentialSecretNames: []
+  apiEgress: []
+existingClaims: {}

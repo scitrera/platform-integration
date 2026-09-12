@@ -1,0 +1,347 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: '{{ .Release.Name }}-default-deny'
+spec:
+  podSelector: {}
+  policyTypes:
+  - Ingress
+  - Egress
+  ingress: []
+  egress: []
+
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: '{{ .Release.Name }}-dns'
+spec:
+  podSelector: {}
+  policyTypes:
+  - Egress
+  egress:
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: kube-system
+    ports:
+    - protocol: UDP
+      port: 53
+    - protocol: TCP
+      port: 53
+
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: '{{ .Release.Name }}-services'
+spec:
+  podSelector:
+    matchLabels: &id001
+      platform.scitrera.io/trust: service
+  policyTypes:
+  - Ingress
+  - Egress
+  ingress:
+  - from:
+    - podSelector:
+        matchLabels: *id001
+  egress:
+  - to:
+    - podSelector:
+        matchLabels: *id001
+    - podSelector:
+        matchExpressions:
+        - key: cnpg.io/cluster
+          operator: Exists
+
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: '{{ .Release.Name }}-database'
+spec:
+  podSelector:
+    matchExpressions:
+    - key: cnpg.io/cluster
+      operator: Exists
+  policyTypes:
+  - Ingress
+  - Egress
+  ingress:
+  - from:
+    - podSelector:
+        matchLabels:
+          platform.scitrera.io/trust: service
+    ports:
+    - protocol: TCP
+      port: 5432
+  - from:
+    - podSelector:
+        matchExpressions:
+        - key: cnpg.io/cluster
+          operator: Exists
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: cnpg-system
+  egress:
+  - to:
+    - podSelector:
+        matchExpressions:
+        - key: cnpg.io/cluster
+          operator: Exists
+  - ports:
+    - protocol: TCP
+      port: 443
+    - protocol: TCP
+      port: 6443
+
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: '{{ .Release.Name }}-platform-ingress'
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/component: platform
+  policyTypes:
+  - Ingress
+  ingress:
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: '{{ .Values.sharedNamespace }}'
+      podSelector:
+        matchLabels:
+          app.kubernetes.io/component: web
+    ports:
+    - protocol: TCP
+      port: 8000
+
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: '{{ .Release.Name }}-aether-sandbox'
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/component: aether
+  policyTypes:
+  - Ingress
+  ingress:
+  - from:
+    - podSelector:
+        matchLabels:
+          app.kubernetes.io/managed-by: scitrera-sandbox
+    ports:
+    - protocol: TCP
+      port: 50051
+
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: '{{ .Release.Name }}-sandbox'
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/managed-by: scitrera-sandbox
+  policyTypes:
+  - Ingress
+  - Egress
+  ingress:
+  - from:
+    - podSelector:
+        matchLabels:
+          app.kubernetes.io/component: provider
+    ports:
+    - protocol: TCP
+      port: 18790
+    - protocol: TCP
+      port: 44772
+  egress:
+  - to:
+    - podSelector:
+        matchLabels:
+          app.kubernetes.io/component: aether
+    ports:
+    - protocol: TCP
+      port: 50051
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: '{{ .Values.sharedNamespace }}'
+      podSelector:
+        matchLabels:
+          app.kubernetes.io/component: gateway
+    ports:
+    - protocol: TCP
+      port: 8080
+  - to:
+    - ipBlock:
+        cidr: 0.0.0.0/0
+        except:
+        - 10.0.0.0/8
+        - 172.16.0.0/12
+        - 192.168.0.0/16
+        - 169.254.0.0/16
+    ports:
+    - protocol: TCP
+      port: 80
+    - protocol: TCP
+      port: 443
+
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: '{{ .Release.Name }}-provider-control'
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/component: provider
+  policyTypes:
+  - Egress
+  egress:
+  - to:
+    - podSelector:
+        matchLabels:
+          app.kubernetes.io/managed-by: scitrera-sandbox
+    ports:
+    - protocol: TCP
+      port: 18790
+    - protocol: TCP
+      port: 44772
+  - ports:
+    - protocol: TCP
+      port: 443
+    - protocol: TCP
+      port: 6443
+
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: '{{ .Release.Name }}-connectors-storage'
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/component: connectors
+  policyTypes:
+  - Egress
+  egress:
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: '{{ .Values.storageNamespace }}'
+    ports:
+    - protocol: TCP
+      port: 8080
+    - protocol: TCP
+      port: 8090
+
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: '{{ .Release.Name }}-embedding'
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/component: memorylayer
+  policyTypes:
+  - Egress
+  egress:
+  - ports:
+    - protocol: TCP
+      port: 80
+    - protocol: TCP
+      port: 443
+    - protocol: TCP
+      port: 8080
+
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: '{{ .Release.Name }}-document-fetch'
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/component: memorylayer
+  policyTypes:
+  - Egress
+  egress:
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: '{{ .Values.storageNamespace }}'
+      podSelector:
+        matchLabels:
+          app.kubernetes.io/component: edge
+    ports:
+    - protocol: TCP
+      port: 8090
+
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+ name: '{{ .Release.Name }}-sandbox-download'
+spec:
+ podSelector:
+  matchLabels:
+   app.kubernetes.io/managed-by: scitrera-sandbox
+ policyTypes: [Egress]
+ egress:
+ - to:
+   - namespaceSelector:
+      matchLabels:
+       kubernetes.io/metadata.name: '{{ .Values.storageNamespace }}'
+     podSelector:
+      matchLabels:
+       app.kubernetes.io/component: download
+   ports:
+   - {protocol: TCP, port: 8080}
+
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ .Release.Name }}-gateway-catalog
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/component: aether
+  policyTypes: [Ingress]
+  ingress:
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: {{ .Values.sharedNamespace | quote }}
+      podSelector:
+        matchLabels:
+          app.kubernetes.io/component: gateway
+    ports:
+    - {protocol: TCP, port: 50051}
+
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ .Release.Name }}-tools-ingress
+spec:
+  podSelector:
+    matchLabels: {app.kubernetes.io/component: tools}
+  policyTypes: [Ingress]
+  ingress:
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: {{ .Values.sharedNamespace | quote }}
+      podSelector:
+        matchLabels: {app.kubernetes.io/component: web}
+    ports: [{protocol: TCP, port: 8090}]

@@ -1,0 +1,171 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+{{- if ge (int .Values.phase) 2 }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Release.Name }}-memorylayer
+  labels:
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/component: memorylayer
+    platform.scitrera.io/trust: service
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/instance: {{ .Release.Name }}
+      app.kubernetes.io/component: memorylayer
+      platform.scitrera.io/trust: service
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/instance: {{ .Release.Name }}
+        app.kubernetes.io/component: memorylayer
+        platform.scitrera.io/trust: service
+    spec:
+      serviceAccountName: {{ .Release.Name }}-runtime
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
+      terminationGracePeriodSeconds: 30
+      containers:
+      - name: memorylayer
+        image: {{ required "images.memorylayer is required" .Values.images.memorylayer | quote }}
+        imagePullPolicy: IfNotPresent
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop:
+            - ALL
+        resources:
+{{ toYaml (index .Values.roleResources "memorylayer" | default .Values.resources) | indent 10 }}
+        env:
+        - name: MEMORYLAYER_DATA_DIR
+          value: /data
+        - name: MEMORYLAYER_BLOB_STORAGE_BASE_PATH
+          value: /data/blobs
+        - name: STATEFUL_ROOT
+          value: /tmp/state
+        - name: XDG_CONFIG_HOME
+          value: /tmp/config
+        - name: AETHER_GATEWAY
+          value: {{ .Release.Name }}-aether:50051
+        - name: AETHER_AUTH
+          value: none
+        - name: AETHER_TLS_ENABLED
+          value: 'true'
+        - name: AETHER_TLS_CA_CERT
+          value: /run/tls/ca.crt
+        - name: AETHER_TLS_CLIENT_CERT
+          value: /run/tls/tls.crt
+        - name: AETHER_TLS_CLIENT_KEY
+          value: /run/tls/tls.key
+        - name: SCITRERA_TENANT
+          value: {{ .Values.tenant }}
+        - name: LOGGING_LEVEL
+          value: INFO
+        - name: AETHER_MAX_RECONNECT_ATTEMPTS
+          value: '0'
+        - name: AETHER_GATEWAY_ADDR
+          value: {{ .Release.Name }}-aether:50051
+        - name: MEMORYLAYER_SERVER_HOST
+          value: 0.0.0.0
+        - name: MEMORYLAYER_SERVER_PORT
+          value: '8000'
+        - name: MEMORYLAYER_STORAGE_BACKEND
+          value: postgresql
+        - name: MEMORYLAYER_AUTO_MIGRATE
+          value: '0'
+        - name: MEMORYLAYER_CACHE_SERVICE
+          value: aether-kv
+        - name: MEMORYLAYER_RATE_LIMIT_SERVICE
+          value: aether-kv
+        - name: MEMORYLAYER_AUDIT_SERVICE
+          value: postgresql
+        - name: MEMORYLAYER_AUTHENTICATION_SERVICE
+          value: aether
+        - name: MEMORYLAYER_AETHER_TERMINATOR_HEADER_MODE
+          value: passthrough
+        - name: MEMORYLAYER_METRICS_SERVICE
+          value: noop
+        - name: MEMORYLAYER_TASKS_INPROCESS_WORKER
+          value: 'true'
+        - name: MEMORYLAYER_EMBEDDING_DIMENSIONS
+          value: {{ .Values.embeddingDimensions | quote }}
+        - name: MEMORYLAYER_EMBED_TRANSPORT
+          value: http
+        - name: MEMORYLAYER_ENTITY_LINKER_PROVIDER
+          value: none
+        - name: MEMORYLAYER_DOCUMENT_TRANSCRIBE_ENABLED
+          value: {{ .Values.documentTranscription | quote }}
+        - name: MEMORYLAYER_CHAT_TITLE_ENABLED
+          value: '0'
+        - name: MEMORYLAYER_OTEL_ENABLED
+          value: 'false'
+        - name: MEMORYLAYER_GRAPH_ANALYSIS_PROVIDER
+          value: default
+        - name: MEMORYLAYER_GRAPH_QUERY_PROVIDER
+          value: default
+        volumeMounts:
+        - name: data
+          mountPath: /data
+        - name: tmp
+          mountPath: /tmp
+        - name: tls
+          mountPath: /run/tls
+          readOnly: true
+        envFrom:
+        - secretRef:
+            name: {{ index .Values.secrets "memorylayer" | quote }}
+        readinessProbe:
+          httpGet: &id001
+            port: 8000
+            path: /health/ready
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 6
+        startupProbe:
+          httpGet: *id001
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 60
+        livenessProbe:
+          httpGet: *id001
+          periodSeconds: 15
+          timeoutSeconds: 3
+          failureThreshold: 6
+      volumes:
+      - name: data
+        persistentVolumeClaim:
+          claimName: {{ index .Values.existingClaims "memorylayer" | default (printf "%s-memorylayer-data" .Release.Name) | quote }}
+      - name: tmp
+        emptyDir: {}
+      - name: tls
+        secret:
+          secretName: {{ index .Values.secrets.tls "memorylayer" | quote }}
+{{- end }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .Release.Name }}-memorylayer
+  labels:
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/component: memorylayer
+    platform.scitrera.io/trust: service
+spec:
+  selector:
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/component: memorylayer
+    platform.scitrera.io/trust: service
+  ports:
+  - name: http
+    port: 8000
+    targetPort: 8000

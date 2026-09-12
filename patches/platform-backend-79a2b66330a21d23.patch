@@ -1,0 +1,2978 @@
+diff --git a/agent-harness/sahara/Dockerfile b/agent-harness/sahara/Dockerfile
+index 1a18fb5..60e4e2c 100644
+--- a/agent-harness/sahara/Dockerfile
++++ b/agent-harness/sahara/Dockerfile
+@@ -9,7 +9,13 @@ ENV GOWORK=off
+ WORKDIR /src
+ COPY agent-harness/sahara/go.mod agent-harness/sahara/go.sum ./
+ RUN go mod download
++COPY agent-harness/sahara/patches/agent-harness-model-history.patch /tmp/agent-harness-model-history.patch
++RUN HARNESS_MODULE_DIR="$(go list -m -f '{{.Dir}}' github.com/scitrera/agent-harness-go)" && \
++    cp -a "$HARNESS_MODULE_DIR" /opt/agent-harness && \
++    chmod -R u+w /opt/agent-harness && \
++    git -C /opt/agent-harness apply /tmp/agent-harness-model-history.patch
+ COPY agent-harness/sahara/ ./
++RUN go mod edit -replace github.com/scitrera/agent-harness-go=/opt/agent-harness
+ RUN CGO_ENABLED=0 go build -mod=readonly -trimpath -o /out/scitrera-agent-harness ./cmd/scitrera-agent-harness && \
+     CGO_ENABLED=0 go build -mod=readonly -trimpath -o /out/tool-catalog-service github.com/scitrera/agent-harness-go/cmd/tool-catalog-service
+ FROM docker.io/library/python:3.12-slim-bookworm@sha256:782412e85d0f0984994c290652577d4018aff08145c85b262bb63dc0c7522254
+@@ -31,3 +37,5 @@ ENTRYPOINT ["/usr/bin/tini", "--", "/usr/local/bin/entrypoint.sh"]
+ # Distribution notices include dependency texts; source remains component-licensed.
+ COPY LICENSE-MAP.json third-party-dependencies.json THIRD_PARTY_NOTICES.md sources.lock.json /usr/share/licenses/platform-backend/
+ COPY LICENSES/ /usr/share/licenses/platform-backend/LICENSES/
++
++COPY agent-harness/sahara/patches/ /usr/share/licenses/platform-backend/dependency-patches/
+diff --git a/agent-harness/sahara/bridge/catalogsource.go b/agent-harness/sahara/bridge/catalogsource.go
+index 6d5e3c5..33372a2 100644
+--- a/agent-harness/sahara/bridge/catalogsource.go
++++ b/agent-harness/sahara/bridge/catalogsource.go
+@@ -8,6 +8,7 @@ import (
+ 	"sort"
+ 	"strings"
+ 	"time"
++	"unicode"
+ 
+ 	livecatalog "github.com/scitrera/agent-harness-go/pkg/catalog"
+ 	"github.com/scitrera/agent-harness-go/pkg/protocol"
+@@ -53,16 +54,20 @@ func (s *CatalogSource) Tools(ctx context.Context, addr protocol.MessageAddress,
+ 	if err := validateResolvedCatalogContext(catalogContext, addr); err != nil {
+ 		return nil, err
+ 	}
++	// Catalog Query is a literal all-terms filter, not a natural-language
++	// relevance query. Enumerate only this authoritative context's admitted
++	// tools, then rank the bounded result set against the turn text.
++	queryText := textOf(user)
+ 	query := spec.ToolCatalogQuery{
+ 		SchemaVersion: spec.ToolCatalogSchemaVersion, Context: catalogContext,
+-		Query: textOf(user), Limit: uint32(s.limit),
++		Limit: 100,
+ 	}
+ 	queryCtx, cancel := context.WithTimeout(ctx, discoverTimeout)
+ 	defer cancel()
+ 	t0 := time.Now()
+ 	result := make([]tools.Descriptor, 0, s.limit)
+ 	ambiguous := map[string]struct{}{}
+-	for pageCount := 0; pageCount < 10 && len(result) < s.limit; pageCount++ {
++	for pageCount := 0; pageCount < 10; pageCount++ {
+ 		page, err := s.caller.QueryCatalog(queryCtx, query, auth)
+ 		if err != nil {
+ 			return nil, err
+@@ -79,9 +84,6 @@ func (s *CatalogSource) Tools(ctx context.Context, addr protocol.MessageAddress,
+ 				return nil, err
+ 			}
+ 			result = append(result, descriptor)
+-			if len(result) == s.limit {
+-				break
+-			}
+ 		}
+ 		if page.NextCursor == "" {
+ 			break
+@@ -96,12 +98,54 @@ func (s *CatalogSource) Tools(ctx context.Context, addr protocol.MessageAddress,
+ 		sort.Strings(names)
+ 		slog.WarnContext(ctx, "live catalog omitted ambiguous bare tool names", "names", names)
+ 	}
++	// A later page can identify a collision with an earlier page. Never
++	// expose an ambiguous bare name to the model.
++	filtered := result[:0]
++	for _, descriptor := range result {
++		if _, collided := ambiguous[descriptor.Name]; !collided {
++			filtered = append(filtered, descriptor)
++		}
++	}
++	result = filtered
++	sort.SliceStable(result, func(i, j int) bool {
++		return catalogRelevance(result[i], queryText) > catalogRelevance(result[j], queryText)
++	})
++	if len(result) > s.limit {
++		result = result[:s.limit]
++	}
++
+ 	slog.InfoContext(ctx, "live catalog discovered tools",
+-		slog.String("query", query.Query), slog.Int("results", len(result)),
++		slog.String("query", queryText), slog.Int("results", len(result)),
+ 		slog.Duration("elapsed", time.Since(t0)))
+ 	return result, nil
+ }
+ 
++// Ranking affects presentation only. Discovery and invocation still use the
++// catalog's checked context, exact references and resolved authority.
++func catalogRelevance(descriptor tools.Descriptor, query string) int {
++	query = strings.ToLower(query)
++	name := strings.ToLower(descriptor.Name)
++	score := 0
++	terms := strings.FieldsFunc(query, func(r rune) bool {
++		return !unicode.IsLetter(r) && !unicode.IsDigit(r) && r != '_'
++	})
++	seen := make(map[string]bool)
++	haystack := name + " " + strings.ToLower(descriptor.Description)
++	for _, term := range terms {
++		if seen[term] {
++			continue
++		}
++		seen[term] = true
++		if term == name {
++			score += 1000
++		}
++		if len(term) >= 3 && strings.Contains(haystack, term) {
++			score++
++		}
++	}
++	return score
++}
++
+ func validateResolvedCatalogContext(resolved spec.ToolCatalogContext, addr protocol.MessageAddress) error {
+ 	if err := resolved.Validate(); err != nil {
+ 		return fmt.Errorf("live catalog: invalid trusted turn context: %w", err)
+diff --git a/agent-harness/sahara/bridge/catalogsource_test.go b/agent-harness/sahara/bridge/catalogsource_test.go
+index f39d10f..45b57ca 100644
+--- a/agent-harness/sahara/bridge/catalogsource_test.go
++++ b/agent-harness/sahara/bridge/catalogsource_test.go
+@@ -143,12 +143,20 @@ func TestDescriptorUsesPrivateProviderRouteForWorkspaceWideEntry(t *testing.T) {
+ }
+ 
+ type fakeCatalogCaller struct {
+-	query spec.ToolCatalogQuery
+-	page  livecatalog.ResolvedCatalogPage
++	query   spec.ToolCatalogQuery
++	page    livecatalog.ResolvedCatalogPage
++	pages   []livecatalog.ResolvedCatalogPage
++	queries []spec.ToolCatalogQuery
+ }
+ 
+ func (f *fakeCatalogCaller) QueryCatalog(_ context.Context, query spec.ToolCatalogQuery, _ tools.MemoryAuthority) (livecatalog.ResolvedCatalogPage, error) {
+ 	f.query = query
++	f.queries = append(f.queries, query)
++	if len(f.pages) > 0 {
++		page := f.pages[0]
++		f.pages = f.pages[1:]
++		return page, nil
++	}
+ 	return f.page, nil
+ }
+ 
+@@ -183,3 +191,48 @@ func catalogRecord(provider, name string, catalogContext spec.ToolCatalogContext
+ 		},
+ 	}
+ }
++
++func TestCatalogSourceRanksNaturalLanguageAcrossPagesWithoutLiteralFiltering(t *testing.T) {
++	ctx := spec.ToolCatalogContext{WorkspaceID: "workspace-a", ToolHostID: "us::alice::window-1", SurfaceKind: "web", SurfaceInstanceID: "window-1"}
++	caller := &fakeCatalogCaller{pages: []livecatalog.ResolvedCatalogPage{
++		{Records: []livecatalog.ResolvedCatalogEntry{catalogRecord("a", "unrelated_tool", ctx)}, NextCursor: "next"},
++		{Records: []livecatalog.ResolvedCatalogEntry{catalogRecord("b", "frontend_set_chat_state", ctx)}},
++	}}
++	source := NewCatalogSource(caller, fakeCatalogInvoker{}, fakeCatalogContextResolver{context: ctx}, 1)
++	part, err := protocol.NewTextPart("Please call frontend_set_chat_state fullscreen for integration-marker-abc123")
++	if err != nil {
++		t.Fatal(err)
++	}
++	got, err := source.Tools(context.Background(), protocol.MessageAddress{WorkspaceID: "workspace-a"},
++		protocol.ChatMessage{Content: []protocol.ContentPart{part}})
++	if err != nil {
++		t.Fatal(err)
++	}
++	if len(got) != 1 || got[0].Name != "frontend_set_chat_state" {
++		t.Fatalf("ranked tools: %+v", got)
++	}
++	if len(caller.queries) != 2 || caller.queries[1].Cursor != "next" {
++		t.Fatalf("queries: %+v", caller.queries)
++	}
++	for _, query := range caller.queries {
++		if query.Query != "" || query.Context.WorkspaceID != "workspace-a" || query.Limit != 100 {
++			t.Fatalf("discovery widened context or applied literal user filter: %+v", query)
++		}
++	}
++}
++
++func TestCatalogSourceRemovesEarlierNameWhenLaterPageDeclaresAmbiguity(t *testing.T) {
++	ctx := spec.ToolCatalogContext{WorkspaceID: "workspace-a", ToolHostID: "us::alice::window-1", SurfaceKind: "web", SurfaceInstanceID: "window-1"}
++	caller := &fakeCatalogCaller{pages: []livecatalog.ResolvedCatalogPage{
++		{Records: []livecatalog.ResolvedCatalogEntry{catalogRecord("a", "collision", ctx)}, NextCursor: "next"},
++		{Records: []livecatalog.ResolvedCatalogEntry{catalogRecord("b", "safe", ctx)}, AmbiguousNames: []string{"collision"}},
++	}}
++	source := NewCatalogSource(caller, fakeCatalogInvoker{}, fakeCatalogContextResolver{context: ctx}, 8)
++	got, err := source.Tools(context.Background(), protocol.MessageAddress{WorkspaceID: "workspace-a"}, protocol.ChatMessage{})
++	if err != nil {
++		t.Fatal(err)
++	}
++	if len(got) != 1 || got[0].Name != "safe" {
++		t.Fatalf("ambiguous tools: %+v", got)
++	}
++}
+diff --git b/agent-harness/sahara/patches/README.md b/agent-harness/sahara/patches/README.md
+new file mode 100644
+index 0000000..2dcea59
+--- /dev/null
++++ b/agent-harness/sahara/patches/README.md
+@@ -0,0 +1,17 @@
++# Model-history compatibility patch
++
++The Apache-2.0 patch applies to agent-harness-go
++v0.0.3-0.20260909203225-dd886fea04d3. Its owning source is
++pkg/provider/shared_client.go and its focused regression test in that project.
++
++MemoryLayer may persist one assistant bubble containing multiple tool-call/result
++cycles. The shared model adapter must expand that bubble into ordered assistant
++segments and one tool message per result before Chat Completions encoding.
++Otherwise a restarted Sahara worker rejects an existing thread before contacting
++the gateway. The original persisted history is unchanged.
++
++The Sahara Dockerfile downloads and verifies the pinned public Go module, applies
++this reviewed patch to a separate build directory and uses a local module
++replacement only inside that build. The integration compatibility manifest records
++this patch and the resulting image ID. Remove the patch when consuming an upstream
++release containing the fix. This is not a new published dependency release.
+diff --git b/agent-harness/sahara/patches/agent-harness-model-history.patch b/agent-harness/sahara/patches/agent-harness-model-history.patch
+new file mode 100644
+index 0000000..91df65c
+--- /dev/null
++++ b/agent-harness/sahara/patches/agent-harness-model-history.patch
+@@ -0,0 +1,143 @@
++diff --git a/pkg/provider/shared_client.go b/pkg/provider/shared_client.go
++index 5ec1d08..a5c324a 100644
++--- a/pkg/provider/shared_client.go
+++++ b/pkg/provider/shared_client.go
++@@ -42,7 +42,7 @@ func sharedProtocolRequest(chat ChatRequest) (llmprotocol.Request, error) {
++ 			Parameters:  parameters,
++ 		})
++ 	}
++-	for _, source := range chat.Messages {
+++	for _, source := range expandToolResultMessages(chat.Messages) {
++ 		message, err := sharedProtocolMessage(source)
++ 		if err != nil {
++ 			return llmprotocol.Request{}, err
++@@ -59,6 +59,52 @@ func sharedProtocolRequest(chat ChatRequest) (llmprotocol.Request, error) {
++ 	return request, nil
++ }
++ 
+++// expandToolResultMessages projects persisted UI messages into model turns.
+++// A single assistant bubble may contain several call/result cycles. Chat
+++// completions requires one tool message per result, with assistant segments
+++// before and after it. Keep content order and the persisted input unchanged.
+++func expandToolResultMessages(messages []protocol.ChatMessage) []protocol.ChatMessage {
+++	out := make([]protocol.ChatMessage, 0, len(messages))
+++	for _, source := range messages {
+++		hasResult := false
+++		for _, part := range source.Content {
+++			if part.Type() == protocol.ContentToolResult {
+++				hasResult = true
+++				break
+++			}
+++		}
+++		if !hasResult {
+++			out = append(out, source)
+++			continue
+++		}
+++		segment := source
+++		segment.Content = nil
+++		index := 0
+++		flush := func() {
+++			if len(segment.Content) == 0 {
+++				return
+++			}
+++			segment.ID = fmt.Sprintf("%s-model-%d", source.ID, index)
+++			index++
+++			out = append(out, segment)
+++			segment = source
+++			segment.Content = nil
+++		}
+++		for _, part := range source.Content {
+++			if part.Type() == protocol.ContentToolResult {
+++				flush()
+++				segment.Role = protocol.RoleToolResult
+++				segment.Content = []protocol.ContentPart{part}
+++				flush()
+++			} else {
+++				segment.Content = append(segment.Content, part)
+++			}
+++		}
+++		flush()
+++	}
+++	return out
+++}
+++
++ func (c *OpenAICompatClient) prepareSharedRequest(request *llmprotocol.Request) {
++ 	if c.format == FormatResponses {
++ 		openaiprovider.PrepareResponsesApplyPatchRequest(request)
++diff --git a/pkg/provider/model_history_test.go b/pkg/provider/model_history_test.go
++new file mode 100644
++--- /dev/null
+++++ b/pkg/provider/model_history_test.go
++@@ -0,0 +1,72 @@
+++// SPDX-License-Identifier: Apache-2.0
+++package provider
+++
+++import (
+++	"encoding/json"
+++	"reflect"
+++	"testing"
+++
+++	"github.com/scitrera/agent-harness-go/pkg/protocol"
+++	llmprotocol "github.com/scitrera/go-llm/protocol"
+++)
+++
+++func TestSharedProtocolRequestExpandsPersistedToolCycles(t *testing.T) {
+++	var source protocol.ChatMessage
+++	if err := json.Unmarshal([]byte(`{"id":"history","role":"assistant","content":[
+++  {"type":"text","text":"working"},
+++  {"type":"tool_call","id":"a","name":"first","args":{}},
+++  {"type":"tool_result","call_id":"a","name":"first","result":"one"},
+++  {"type":"tool_call","id":"b","name":"second","args":{}},
+++  {"type":"tool_result","call_id":"b","name":"second","result":"two"},
+++  {"type":"text","text":"finished"}
+++ ]}`), &source); err != nil {
+++		t.Fatal(err)
+++	}
+++	before, _ := json.Marshal(source)
+++	request, err := sharedProtocolRequest(ChatRequest{Messages: []protocol.ChatMessage{source}})
+++	if err != nil {
+++		t.Fatal(err)
+++	}
+++	roles := []llmprotocol.Role{}
+++	resultIDs := []string{}
+++	for _, message := range request.Messages {
+++		roles = append(roles, message.Role)
+++		for _, part := range message.Content {
+++			if part.Result != nil {
+++				resultIDs = append(resultIDs, part.Result.ToolCallID)
+++			}
+++		}
+++	}
+++	if !reflect.DeepEqual(roles, []llmprotocol.Role{llmprotocol.RoleAssistant, llmprotocol.RoleTool, llmprotocol.RoleAssistant, llmprotocol.RoleTool, llmprotocol.RoleAssistant}) {
+++		t.Fatalf("roles=%v", roles)
+++	}
+++	if !reflect.DeepEqual(resultIDs, []string{"a", "b"}) {
+++		t.Fatalf("result ids=%v", resultIDs)
+++	}
+++	after, _ := json.Marshal(source)
+++	if string(before) != string(after) {
+++		t.Fatal("persisted input was mutated")
+++	}
+++}
+++
+++func TestSharedProtocolRequestSplitsParallelToolResults(t *testing.T) {
+++	var source protocol.ChatMessage
+++	if err := json.Unmarshal([]byte(`{"id":"parallel","role":"tool_result","content":[
+++  {"type":"tool_result","call_id":"a","result":"one"},
+++  {"type":"tool_result","call_id":"b","result":"two"}
+++ ]}`), &source); err != nil {
+++		t.Fatal(err)
+++	}
+++	request, err := sharedProtocolRequest(ChatRequest{Messages: []protocol.ChatMessage{source}})
+++	if err != nil {
+++		t.Fatal(err)
+++	}
+++	if len(request.Messages) != 2 {
+++		t.Fatalf("messages=%d", len(request.Messages))
+++	}
+++	for _, m := range request.Messages {
+++		if m.Role != llmprotocol.RoleTool || len(m.Content) != 1 {
+++			t.Fatalf("invalid tool message: %+v", m)
+++		}
+++	}
+++}
+diff --git a/backend/scitrera_ai_intelligence/llm/sidecar_projection.py b/backend/scitrera_ai_intelligence/llm/sidecar_projection.py
+index 070ac26..5df2b1e 100644
+--- a/backend/scitrera_ai_intelligence/llm/sidecar_projection.py
++++ b/backend/scitrera_ai_intelligence/llm/sidecar_projection.py
+@@ -38,6 +38,10 @@ NOTE — terminology: "sidecar_intent" is overloaded in code review.
+ 
+ from __future__ import annotations
+ 
++import os
++import re
++from pathlib import Path
++from urllib.parse import urlsplit
+ from typing import TYPE_CHECKING, Any
+ 
+ if TYPE_CHECKING:
+@@ -83,6 +87,21 @@ DEFAULT_ALLOWLIST: tuple[str, ...] = (
+ )
+ 
+ 
++
++def _blob_fetch_allowlist() -> list[str]:
++    """Allow capability-protected blob downloads from one operator endpoint."""
++    value=os.environ.get("SANDBOX_BLOB_FETCH_BASE_URL","").strip()
++    if not value:
++        return []
++    parsed=urlsplit(value)
++    if (parsed.scheme not in {"http","https"} or not parsed.hostname
++            or parsed.username is not None or parsed.password is not None
++            or parsed.query or parsed.fragment):
++        raise ValueError("SANDBOX_BLOB_FETCH_BASE_URL must be an HTTP(S) endpoint without credentials, query or fragment")
++    _ = parsed.port  # reject malformed ports before publishing a projection
++    return ["^"+re.escape(value.rstrip("/")+"/blob/")]
++
++
+ def _build_ml_rewrite(
+     ml_base_url: str, ml_api_key: str,
+ ) -> dict[str, Any] | None:
+@@ -225,6 +244,38 @@ def _gateway_attribution_headers(
+     return headers
+ 
+ 
++def _gateway_route() -> tuple[dict[str, str], str]:
++    """Resolve operator-owned gateway routing; secrets stay in the sidecar.
++
++    A configured token file is required to be readable and nonempty. Its absence
++    never falls back to network trust. Existing network-gated installations retain
++    their default when neither authentication setting is supplied.
++    """
++    route = dict(_BUCKET_UPSTREAM_ROUTES["gateway"])
++    base = os.environ.get("LLM_GATEWAY_BASE_URL", "")
++    if base:
++        parsed = urlsplit(base)
++        if (parsed.scheme not in {"http", "https"} or not parsed.hostname
++                or parsed.username or parsed.password or parsed.query or parsed.fragment):
++            raise ValueError("LLM_GATEWAY_BASE_URL must be an HTTP(S) URL without credentials, query or fragment")
++        route.update(scheme=parsed.scheme, host=parsed.netloc,
++                     path_prefix=parsed.path.rstrip("/") or "/v1")
++    token_file = os.environ.get("LLM_GATEWAY_BEARER_TOKEN_FILE", "")
++    mode = os.environ.get("LLM_GATEWAY_AUTH_MODE", "bearer" if token_file else "trusted_network")
++    if mode not in {"bearer", "trusted_network"}:
++        raise ValueError("LLM_GATEWAY_AUTH_MODE must be bearer or trusted_network")
++    if mode == "trusted_network":
++        if token_file:
++            raise ValueError("Gateway token file conflicts with trusted_network mode")
++        return route, ""
++    if not token_file:
++        raise ValueError("Bearer gateway requires LLM_GATEWAY_BEARER_TOKEN_FILE")
++    token = Path(token_file).read_text().strip()
++    if len(token) < 16 or any(c.isspace() for c in token):
++        raise ValueError("Gateway bearer token must be at least 16 characters without whitespace")
++    return route, token
++
++
+ def _build_llm_virtual_rewrite(
+     tenant: str,
+     *,
+@@ -275,11 +326,12 @@ def _build_llm_virtual_rewrite(
+     # Delayed import: catalog pulls the model entries.
+     from .registry import catalog as _catalog  # noqa: PLC0415
+ 
++    gateway_route, gateway_token = _gateway_route()
+     routes: dict[str, dict[str, Any]] = {}
+     for entry in _catalog.entries():
+         if not entry.static_aliases:
+             continue
+-        upstream = _BUCKET_UPSTREAM_ROUTES.get(entry.bucket)
++        upstream = gateway_route if entry.bucket == "gateway" else _BUCKET_UPSTREAM_ROUTES.get(entry.bucket)
+         if upstream is None or not upstream.get("host"):
+             continue
+         # Build the auth headers per the bucket's scheme. ``bearer`` is
+@@ -297,6 +349,8 @@ def _build_llm_virtual_rewrite(
+             # (harness-stamped) later, just stop passing user= here — the
+             # sidecar won't override it and the harness value survives.
+             headers = _gateway_attribution_headers(tenant, source, user)
++            if gateway_token:
++                headers["Authorization"] = f"Bearer {gateway_token}"
+         else:
+             api_key = keys.get(entry.bucket)
+             if not api_key:
+@@ -521,7 +575,7 @@ def build_sidecar_projection(
+     if extra_rewrites:
+         rewrites.extend(dict(r) for r in extra_rewrites)
+ 
+-    allowlist: list[str] = list(DEFAULT_ALLOWLIST)
++    allowlist: list[str] = list(DEFAULT_ALLOWLIST) + _blob_fetch_allowlist()
+     if extra_allowlist:
+         allowlist.extend(extra_allowlist)
+ 
+diff --git a/backend/scitrera_app_server/provisioning/acl_seed.py b/backend/scitrera_app_server/provisioning/acl_seed.py
+index a97348a..832e313 100644
+--- a/backend/scitrera_app_server/provisioning/acl_seed.py
++++ b/backend/scitrera_app_server/provisioning/acl_seed.py
+@@ -113,6 +113,7 @@ def _parse_staff_emails(raw: str | None) -> list[str]:
+ def _build_grants(
+     tenant_id: str, admin_email: str, staff_emails: list[str] | None = None,
+     seed_dev_admin: bool = False,
++    trusted_service_implementations: list[str] | None = None,
+ ) -> list[tuple]:
+     """Build the explicit ACL grant list (port of the curl POSTs in bash).
+ 
+@@ -428,6 +429,13 @@ def _build_grants(
+         "All authenticated users may create new workspaces (typed capability gate)",
+     ))
+ 
++    # Schedule management is a typed resource, separate from workspace grants.
++    grants.append((
++        "service", "sv::memorylayer::*", "workflow/schedule",
++        "workspaces/_system/schedules/*", _MANAGE,
++        "MemoryLayer manages its maintenance schedules in _system only",
++    ))
++
+     # MemoryLayer Service identity: Manage on _system (tasks/schedules), invoke
+     # the embed server, and route checked document-ingestion VFS operations.
+     # Logical VFS authority is projected per exact workspace by TenantInterface2.
+@@ -693,7 +701,8 @@ def _build_grants(
+                 "path", tenant_id, staff_email, _STAFF_ROLE,
+             )
+ 
+-    return grants
++    from .service_acl_policy import restrict_service_grants
++    return restrict_service_grants(grants, trusted_service_implementations)
+ 
+ 
+ async def seed_acl(
+@@ -719,6 +728,13 @@ async def seed_acl(
+         for ``admin_email`` (the historical ``development@`` all-rights placeholder).
+         Defaults ``False``; the staff role is seeded regardless.
+     """
++    from .service_acl_policy import (parse_trusted_services, reconcile_service_policy,
++                                     parse_read_only_services, read_only_service_grants, parse_configured_service_grants)
++    trusted_services = parse_trusted_services(os.environ.get("ACL_TRUSTED_SERVICE_IMPLEMENTATIONS"))
++    readers = parse_read_only_services(os.environ.get("ACL_READ_ONLY_KV_SERVICES"), trusted_services)
++    configured_service_grants = parse_configured_service_grants(os.environ.get("ACL_SERVICE_GRANTS"))
++    if configured_service_grants and trusted_services is None:
++        raise ValueError("Explicit service grants require a named service policy for strict reconciliation")
+     if staff_emails is None:
+         staff_emails = _parse_staff_emails(os.environ.get(_STAFF_EMAILS_ENV))
+     if staff_emails:
+@@ -743,7 +759,10 @@ async def seed_acl(
+                            tenant_id, category, e)
+ 
+     grants = _build_grants(tenant_id, admin_email, staff_emails,
+-                           seed_dev_admin=seed_dev_admin)
++                           seed_dev_admin=seed_dev_admin,
++                           trusted_service_implementations=trusted_services)
++    grants.extend(read_only_service_grants(readers))
++    grants.extend(configured_service_grants)
+     logger.info("[%s] seeding %d ACL grants", tenant_id, len(grants))
+     for ptype, pid, rtype, rid, level, reason in grants:
+         try:
+@@ -770,6 +789,9 @@ async def seed_acl(
+             logger.warning("[%s] grant %s/%s -> %s/%s @%d error: %s",
+                            tenant_id, ptype, pid, rtype, rid, level, e)
+ 
++    if trusted_services is not None:
++        await reconcile_service_policy(admin_client, grants, _GRANTED_BY)
++
+     # Create the staff role + assign it to each staff email. Runs AFTER the grant
+     # loop so the role's permission-set rows (principal_type="role") already exist.
+     # Both ops are idempotent: create_role returns success=False/ErrRoleExists on a
+diff --git b/backend/scitrera_app_server/provisioning/service_acl_policy.py b/backend/scitrera_app_server/provisioning/service_acl_policy.py
+new file mode 100644
+index 0000000..d4bf381
+--- /dev/null
++++ b/backend/scitrera_app_server/provisioning/service_acl_policy.py
+@@ -0,0 +1,145 @@
++"""Opt-in named service baseline for installations with restricted service readers.
++
++The legacy bootstrap grants every service administrative KV access. Selecting
++ACL_TRUSTED_SERVICE_IMPLEMENTATIONS replaces only those inherited grants with
++named implementation grants. Other explicitly provisioned permissions remain.
++"""
++import re
++import json
++
++PREFIX = "Trusted service baseline: "
++
++
++def parse_trusted_services(raw):
++    if raw is None:
++        return None
++    values = list(dict.fromkeys(raw.replace(",", " ").split()))
++    if not values or any(not re.fullmatch(r"[a-zA-Z0-9][a-zA-Z0-9_.-]{0,127}", value) for value in values):
++        raise ValueError("ACL_TRUSTED_SERVICE_IMPLEMENTATIONS requires explicit service names")
++    return values
++
++
++def parse_read_only_services(raw, trusted):
++    if raw is None:
++        return {}
++    if trusted is None:
++        raise ValueError("Read-only services require a named trusted-service policy")
++    readers = json.loads(raw)
++    if not isinstance(readers, dict):
++        raise ValueError("ACL_READ_ONLY_KV_SERVICES must be an object")
++    for name, keys in readers.items():
++        if parse_trusted_services(name) != [name] or name in trusted:
++            raise ValueError("Read-only service must be distinct from trusted services")
++        if not isinstance(keys, list) or not keys or any(
++            not isinstance(key, str) or not key or key.startswith(("*", "?")) for key in keys
++        ):
++            raise ValueError("Read-only service requires bounded KV key patterns")
++    return readers
++
++
++def read_only_service_grants(readers):
++    result = []
++    for name, keys in readers.items():
++        principal = "sv::" + name + "::*"
++        for resource_type, resources in {
++            "kv_scope": ("global", "workspace", "user", "user-workspace"),
++            "admin": ("admin/*",),
++            "capability": ("capability/*",),
++            "workspace": ("*",),
++            "service_impl": ("*",),
++        }.items():
++            result.extend(("service", principal, resource_type, resource, 0,
++                           PREFIX + "read-only service default deny") for resource in resources)
++        result.extend(("service", principal, "kv_key", key, 10,
++                       PREFIX + "read-only KV key") for key in keys)
++    return result
++
++
++def restrict_service_grants(grants, trusted):
++    if trusted is None:
++        return grants
++    result = []
++    for ptype, pid, rtype, rid, level, reason in grants:
++        if (ptype, pid) == ("wildcard", "_any_service"):
++            result.extend(("service", "sv::" + name + "::*", rtype, rid, level, PREFIX + reason)
++                          for name in trusted)
++        else:
++            result.append((ptype, pid, rtype, rid, level, reason))
++    # Several named services already have a more specific grant for the same
++    # tuple. The legacy wildcard won over those globs. Preserve its effective
++    # maximum when replacing it; repeated upserts must not lower that level.
++    merged = {}
++    for grant in result:
++        key = grant[:4]
++        if key not in merged or grant[4] > merged[key][4]:
++            merged[key] = grant
++    return list(merged.values())
++
++
++def _require(response, action):
++    if response is None or not getattr(response, "success", False):
++        raise RuntimeError("Service ACL policy could not confirm " + action)
++    return response
++
++
++async def reconcile_service_policy(admin, desired, granted_by):
++    """Verify replacement grants before retiring obsolete bootstrap-owned rules.
++
++    An unknown broad grant fails the job for explicit operator review. It is not
++    silently removed. Read-back after retirement makes partial failures retryable.
++    """
++    expected = {(g[0], g[1], g[2], g[3]): g[4] for g in desired if g[5].startswith(PREFIX)}
++    # The expected set is bounded by the installation's explicit service list.
++    for (ptype, pid, rtype, rid), level in expected.items():
++        response = _require(await admin.list_acl_rules(principal_type=ptype, principal_id=pid,
++                            resource_type=rtype, resource_id=rid, limit=2), "replacement grant")
++        if len(response.rules) != 1 or response.rules[0].access_level != level:
++            raise RuntimeError("Service ACL replacement grant read-back mismatch: " +
++                               repr((ptype, pid, rtype, rid, level, [r.access_level for r in response.rules])))
++    obsolete = []
++    # Aether's ACL RPC returns the complete filtered inventory; its current
++    # server ignores the protocol's limit/offset fields. Do not emulate paging.
++    response = _require(await admin.list_acl_rules(), "rule inventory")
++    if len(response.rules) > 10000:
++        raise RuntimeError("Service ACL inventory exceeds the bounded migration limit")
++    for rule in response.rules:
++        broad = (rule.principal_type, rule.principal_id) == ("wildcard", "_any_service")
++        owned = rule.granted_by == granted_by
++        key = (rule.principal_type, rule.principal_id, rule.resource_type, rule.resource_id)
++        stale = rule.reason.startswith(PREFIX) and key not in expected
++        if broad and not owned:
++            raise RuntimeError("Non-bootstrap wildcard service grant requires operator review")
++        if broad or (owned and stale):
++            obsolete.append(rule)
++    for rule in obsolete:
++        _require(await admin.delete_acl_rule(rule.rule_id), "obsolete grant removal")
++    remaining = _require(await admin.list_acl_rules(principal_type="wildcard",
++                         principal_id="_any_service", limit=1), "wildcard retirement")
++    if remaining.rules:
++        raise RuntimeError("Broad service grant remains after reconciliation")
++
++
++def parse_configured_service_grants(raw):
++    """Read explicitly selected deployment grants; no defaults or blanket subjects."""
++    if raw is None:
++        return []
++    rows = json.loads(raw)
++    if not isinstance(rows, list) or len(rows) > 128:
++        raise ValueError("ACL_SERVICE_GRANTS must be a bounded list")
++    result = []
++    for row in rows:
++        if not isinstance(row, dict) or set(row) != {"principal_id", "resource_type", "resource_id", "access_level"}:
++            raise ValueError("ACL_SERVICE_GRANTS row has invalid fields")
++        if not isinstance(row["principal_id"], str) or not re.fullmatch(
++            r"sv::[a-zA-Z0-9][a-zA-Z0-9_.-]{0,127}::[a-zA-Z0-9_.*-]+", row["principal_id"]
++        ):
++            raise ValueError("Configured grant must name a concrete service implementation")
++        if row["resource_type"] not in {"capability", "service_impl", "workspace", "kv_key"}:
++            raise ValueError("Unsupported configured service resource type")
++        if not isinstance(row["resource_id"], str) or not row["resource_id"] or row["resource_id"].startswith(("*", "?")):
++            raise ValueError("Configured grant requires a bounded resource")
++        if type(row["access_level"]) is not int or row["access_level"] not in {0, 10, 20, 30}:
++            raise ValueError("Configured service grant cannot exceed MANAGE")
++        result.append(("service", row["principal_id"], row["resource_type"], row["resource_id"],
++                       row["access_level"], PREFIX + "explicit deployment grant"))
++    return result
+diff --git a/backend/scitrera_app_server/sahara_sidecar.py b/backend/scitrera_app_server/sahara_sidecar.py
+index 97f2599..afff57f 100644
+--- a/backend/scitrera_app_server/sahara_sidecar.py
++++ b/backend/scitrera_app_server/sahara_sidecar.py
+@@ -36,9 +36,8 @@ async def push_sahara_sidecar_projection(
+ ) -> bool:
+     """Build and durably send one user's Sahara sidecar projection.
+ 
+-    Fresh allocations call this from both the web and Office entry points. A
+-    reattach has no new provider task token and therefore skips the call at the
+-    caller. Delivery is a normal Aether message, so it is store-and-forward and
++    Web allocations and reattachments refresh this projection. Delivery uses
++    the authenticated Aether service connection, so it is store-and-forward and
+     cannot race the sidecar's local HTTP listener during first boot.
+     """
+     aether_client = getattr(
+diff --git a/backend/scitrera_app_server/websocket/client_interface.py b/backend/scitrera_app_server/websocket/client_interface.py
+index 4e1fa67..a2b2dba 100644
+--- a/backend/scitrera_app_server/websocket/client_interface.py
++++ b/backend/scitrera_app_server/websocket/client_interface.py
+@@ -734,6 +734,15 @@ class ClientInterface:
+                 return False
+             await asyncio.sleep(self._AUTH_CTX_POLL_SECONDS)
+ 
++    async def _require_user_auth_ctx(self) -> AuthContext:
++        """Require the human session before accessing owner-scoped resources."""
++        ctx = await self._ensure_auth_ctx()
++        if ctx is None and await self._await_auth_ctx():
++            ctx = await self._ensure_auth_ctx()
++        if ctx is None:
++            raise RuntimeError(self.SESSION_NOT_READY_MESSAGE)
++        return ctx
++
+     async def _rollback_onboarding_claim(self, ti, user_bare: str) -> None:
+         """Release the onboarding claim so a later connection retries.
+ 
+@@ -923,20 +932,13 @@ class ClientInterface:
+                 'sahara sandbox allocated: sandbox_id=%s tenant=%s user=%s alloc_ms=%d',
+                 sandbox_id, self.tenant, user_bare, alloc_ms,
+             )
+-            # Best-effort push of the LLM-provider / egress projection. A
+-            # failure here logs a warning but does NOT fail the whole
+-            # allocation — the sidecar will run fail-closed (empty
+-            # allowlist) until the next push lands, which is still better
+-            # than no sandbox at all. Reattach paths (handle from a prior
+-            # alloc) get an empty proxy_api_key from the SDK and skip the
+-            # push, since the projection was already pushed at the
+-            # original alloc.
+-            proxy_api_key = getattr(handle, 'proxy_api_key', '') or ''
+-            if proxy_api_key:
+-                await self._push_sahara_sidecar_projection(
+-                    sandbox_id=sandbox_id,
+-                    proxy_api_key=proxy_api_key,
+-                )
++            # Refresh operator routing on both allocation and reattach. Delivery
++            # uses the authenticated Aether service connection, so the legacy
++            # HTTP proxy task token is not needed to update an existing sandbox.
++            await self._push_sahara_sidecar_projection(
++                sandbox_id=sandbox_id,
++                proxy_api_key=getattr(handle, 'proxy_api_key', '') or '',
++            )
+             return sandbox_id
+         except Exception:
+             self.logger.warning(
+@@ -954,8 +956,8 @@ class ClientInterface:
+         sandbox_id: str,
+         proxy_api_key: str,
+     ) -> None:
+-        """Seed a freshly allocated Sahara sidecar through the shared helper."""
+-        if not proxy_api_key or not self._tenant_pool or not self.tenant:
++        """Refresh a Sahara sidecar through the authenticated shared helper."""
++        if not self._tenant_pool or not self.tenant:
+             return
+         sandbox_client = await self._tenant_pool.get_sahara_sandbox_client(self.tenant)
+         if sandbox_client is None:
+@@ -2407,6 +2409,10 @@ class ClientInterface:
+             build_web_revoke,
+         )
+ 
++        # CONNECTION_READY precedes the Aether user handshake. The browser
++        # publishes its catalog immediately, so wait for the same bounded human
++        # session readiness used by history and other owner-scoped operations.
++        await self._require_user_auth_ctx()
+         if self._stream_client is None or not self.workspace or not self.window_id:
+             raise RuntimeError('browser tool catalog requires an active user workspace session')
+         publication, entries = build_web_publication(
+@@ -2818,7 +2824,7 @@ class ClientInterface:
+         # and TI2._ml_for_request yields the bare platform-server service client
+         # — which reads the service principal's own materialized thread, leaking
+         # chat across every user sharing this pod. Mirrors on_ws_chat_clear_request.
+-        auth_ctx = await self._ensure_auth_ctx()
++        auth_ctx = await self._require_user_auth_ctx()
+         async with acting_as(auth_ctx):
+             history = await ti.get_chat_history(
+                 user, workspace, app_or_thread=thread_id,
+@@ -2880,7 +2886,7 @@ class ClientInterface:
+         # workspaceScoped is the legacy opt-in for workspace-shared threads.
+         user_id = self.user.id
+         ownership: ThreadOwnership = 'workspace' if bool(payload.get('workspaceScoped')) else 'user'
+-        auth_ctx = await self._ensure_auth_ctx()
++        auth_ctx = await self._require_user_auth_ctx()
+         async with acting_as(auth_ctx):
+             await ti.delete_thread(user_id, workspace, thread_id, ownership=ownership)
+ 
+@@ -3070,6 +3076,8 @@ class ClientInterface:
+         # id in ~1ms), retried, failed identically, and told the user their
+         # sandbox was down.
+         session_auth_ctx = await self._ensure_auth_ctx()
++        if session_auth_ctx is None and await self._await_auth_ctx():
++            session_auth_ctx = await self._ensure_auth_ctx()
+         if session_auth_ctx is None:
+             self.logger.warning(
+                 'sahara dispatch: no authority grant yet for user=%s (the user '
+@@ -4265,7 +4273,7 @@ class ClientInterface:
+         ownership: ThreadOwnership = 'workspace' if bool(payload.get('workspaceScoped')) else 'user'
+         # Web frontend always creates threads in the "web" scope so they stay
+         # isolated from Office add-in threads (scope="office").
+-        auth_ctx = await self._ensure_auth_ctx()
++        auth_ctx = await self._require_user_auth_ctx()
+         async with acting_as(auth_ctx):
+             result = await ti.create_thread(
+                 self.user.id, workspace, title=new_title, scope='web',
+@@ -4282,7 +4290,7 @@ class ClientInterface:
+         thread_id = payload.get('threadId')
+         new_title = payload.get('name')
+         ownership: ThreadOwnership = 'workspace' if bool(payload.get('workspaceScoped')) else 'user'
+-        auth_ctx = await self._ensure_auth_ctx()
++        auth_ctx = await self._require_user_auth_ctx()
+         async with acting_as(auth_ctx):
+             result = await ti.rename_thread(
+                 self.user.id, workspace, thread_id, new_title=new_title,
+@@ -4298,7 +4306,7 @@ class ClientInterface:
+         ti, workspace = await self.switch_workspace(payload.get('workspaceId'))
+         thread_id = payload.get('threadId')
+         ownership: ThreadOwnership = 'workspace' if bool(payload.get('workspaceScoped')) else 'user'
+-        auth_ctx = await self._ensure_auth_ctx()
++        auth_ctx = await self._require_user_auth_ctx()
+         async with acting_as(auth_ctx):
+             await ti.delete_thread(
+                 self.user.id, workspace, thread_id, ownership=ownership,
+@@ -4335,7 +4343,7 @@ class ClientInterface:
+         # their (already web-scoped) parent and are minted without an
+         # explicit scope, so a strict web filter could hide them.
+         scope = None if parent_thread else 'web'
+-        auth_ctx = await self._ensure_auth_ctx()
++        auth_ctx = await self._require_user_auth_ctx()
+         async with acting_as(auth_ctx):
+             if user_scoped:
+                 # Return every thread the user owns across workspaces.
+@@ -4879,14 +4887,25 @@ class ClientInterface:
+ 
+     # region Files
+ 
++    @asynccontextmanager
++    async def _file_dc_for_user(self):
++        """Bind file operations to the session user, including checked VFS access."""
++        dc = self._dc_client
++        if dc is None:
++            raise RuntimeError('data-connectors client not initialised')
++        ctx = await self._ensure_auth_ctx()
++        if ctx is None and await self._await_auth_ctx():
++            ctx = await self._ensure_auth_ctx()
++        if ctx is None:
++            raise RuntimeError(self.SESSION_NOT_READY_MESSAGE)
++        async with dc.acting_for(ctx.grant_id, (ctx.subject_type, ctx.subject_id)) as scoped:
++            yield scoped
++
+     async def on_ws_upload_request(self, payload: dict[str, Any]):
+         ti, workspace = await self.switch_workspace(payload.get('workspaceId'))
+         # ACL check: user must be able to write to the workspace
+         if not await ti.can_write_to_workspace(self.user.id, workspace):
+             raise ValueError('user does not have permission to write to workspace')
+-        dc = self._dc_client
+-        if dc is None:
+-            raise RuntimeError('data-connectors client not initialised')
+         # sourcePath (optional) records a grouping path on the VFS entry, e.g.
+         # an app that files uploads under /Bids/{bidder}/. It is filterable via
+         # list_vfs_entries(source_path_prefix=...) and is kept SEPARATE from
+@@ -4913,14 +4932,15 @@ class ClientInterface:
+             if accepted:
+                 upload_metadata['ingest_flags'] = accepted
+ 
+-        result = await dc.mint_upload_url(
+-            workspace_id=workspace,
+-            filename=payload['fileName'],
+-            source_path=payload.get('sourcePath'),
+-            content_type=payload.get('contentType'),
+-            metadata=upload_metadata,
+-            method=payload.get('method', 'POST'),
+-        )
++        async with self._file_dc_for_user() as dc:
++            result = await dc.mint_upload_url(
++                workspace_id=workspace,
++                filename=payload['fileName'],
++                source_path=payload.get('sourcePath'),
++                content_type=payload.get('contentType'),
++                metadata=upload_metadata,
++                method=payload.get('method', 'POST'),
++            )
+         # Wire shape exposes both POST (`fields`) and PUT (`headers`) artifacts
+         # plus the `method` discriminator so the browser client can branch:
+         #   POST: build FormData from `fields`, append the file, POST to `url`.
+@@ -4972,9 +4992,6 @@ class ClientInterface:
+         if not await ti.can_write_to_workspace(self.user.id, workspace):
+             raise ValueError('user does not have permission to write to workspace')
+ 
+-        dc = self._dc_client
+-        if dc is None:
+-            raise RuntimeError('data-connectors client not initialised')
+ 
+         visibility = payload.get('visibility') or 'workspace'
+         initiated_by = f"us::{self.user.id.removeprefix('user:')}"
+@@ -4984,31 +5001,32 @@ class ClientInterface:
+         # ingested as a knowledge-base document. Library/ingest uploads omit it.
+         skip_ingest = bool(payload.get('skip_ingest'))
+ 
+-        finalized = 0
+-        for item in items:
+-            vfs_ref = item.get('vfs_ref') or item.get('blob_key') or item.get('doc_id')
+-            if not vfs_ref:
+-                self.logger.warning('upload-complete item missing vfs_ref/blob_key/doc_id; skipping: %r', item)
+-                continue
+-            try:
+-                await dc.finalize_vfs_entry(
+-                    workspace_id=workspace,
+-                    vfs_ref=vfs_ref,
+-                    content_hash=item.get('content_hash'),
+-                    content_type=item.get('content_type'),
+-                    size_bytes=item.get('size_bytes'),
+-                    initiated_by=initiated_by,
+-                    visibility=visibility,
+-                    skip_ingest=skip_ingest,
+-                )
+-                finalized += 1
+-            except Exception:
+-                # Best-effort: one failed ingest trigger must not break the ack
+-                # or the other items.
+-                self.logger.error(
+-                    'failed to finalize upload for vfs_ref=%s (workspace=%s)',
+-                    vfs_ref, workspace, exc_info=True,
+-                )
++        async with self._file_dc_for_user() as dc:
++            finalized = 0
++            for item in items:
++                vfs_ref = item.get('vfs_ref') or item.get('blob_key') or item.get('doc_id')
++                if not vfs_ref:
++                    self.logger.warning('upload-complete item missing vfs_ref/blob_key/doc_id; skipping: %r', item)
++                    continue
++                try:
++                    await dc.finalize_vfs_entry(
++                        workspace_id=workspace,
++                        vfs_ref=vfs_ref,
++                        content_hash=item.get('content_hash'),
++                        content_type=item.get('content_type'),
++                        size_bytes=item.get('size_bytes'),
++                        initiated_by=initiated_by,
++                        visibility=visibility,
++                        skip_ingest=skip_ingest,
++                    )
++                    finalized += 1
++                except Exception:
++                    # Best-effort: one failed ingest trigger must not break the ack
++                    # or the other items.
++                    self.logger.error(
++                        'failed to finalize upload for vfs_ref=%s (workspace=%s)',
++                        vfs_ref, workspace, exc_info=True,
++                    )
+ 
+         return {'finalized': finalized, 'requested': len(items)}
+ 
+@@ -5016,18 +5034,16 @@ class ClientInterface:
+         ti, workspace = await self.switch_workspace(payload.get('workspaceId'))
+         if not await ti.can_read_workspace(self.user.id, workspace):
+             raise ValueError('user does not have permission to read workspace')
+-        dc = self._dc_client
+-        if dc is None:
+-            raise RuntimeError('data-connectors client not initialised')
+-        result = await dc.mint_download_url(
+-            workspace_id=workspace,
+-            vfs_ref=payload['docId'],
+-            # Bind the auth-bound download token to this session's user so the
+-            # storage2 edge exact-match ``ra`` check passes when they click the
+-            # URL. ``self.user.email`` is the value auth-go stamps as
+-            # ``X-Scitrera-User`` for this user.
+-            subject=self.user.email if self.user else None,
+-        )
++        async with self._file_dc_for_user() as dc:
++            result = await dc.mint_download_url(
++                workspace_id=workspace,
++                vfs_ref=payload['docId'],
++                # Bind the auth-bound download token to this session's user so the
++                # storage2 edge exact-match ``ra`` check passes when they click the
++                # URL. ``self.user.email`` is the value auth-go stamps as
++                # ``X-Scitrera-User`` for this user.
++                subject=self.user.email if self.user else None,
++            )
+         # Preserve the frontend wire shape: {url, key}
+         return {
+             'url': result['url'],
+diff --git a/backend/tests/_provisioning/test_acl_seed.py b/backend/tests/_provisioning/test_acl_seed.py
+index 6b8fef7..f6fdadc 100644
+--- a/backend/tests/_provisioning/test_acl_seed.py
++++ b/backend/tests/_provisioning/test_acl_seed.py
+@@ -347,3 +347,12 @@ def test_no_wildcard_user_grant_on_the_shared_user_kv_scopes():
+ def test_omitted_agent_has_no_named_catalog_grants():
+     grants = _build_grants(TENANT, ADMIN_EMAIL)
+     assert not [g for g in grants if "CoworkAgent" in g[1]]
++
++
++def test_memorylayer_schedule_grant_is_scoped_to_system_workspace():
++    grants = _build_grants(TENANT, ADMIN_EMAIL)
++    schedule_grants = [g[:5] for g in grants if g[2] == "workflow/schedule"]
++    assert schedule_grants == [
++        ("service", "sv::memorylayer::*", "workflow/schedule",
++         "workspaces/_system/schedules/*", 30),
++    ]
+diff --git b/backend/tests/_provisioning/test_service_acl_policy.py b/backend/tests/_provisioning/test_service_acl_policy.py
+new file mode 100644
+index 0000000..7bcb2eb
+--- /dev/null
++++ b/backend/tests/_provisioning/test_service_acl_policy.py
+@@ -0,0 +1,93 @@
++from types import SimpleNamespace as NS
++from unittest.mock import AsyncMock
++import pytest
++from scitrera_app_server.provisioning.acl_seed import _build_grants
++from scitrera_app_server.provisioning.service_acl_policy import (
++    PREFIX, parse_trusted_services, reconcile_service_policy,
++)
++
++
++def test_named_policy_has_no_inherited_permission_for_unlisted_services():
++    legacy = _build_grants("fixture", "")
++    restricted = _build_grants("fixture", "", trusted_service_implementations=["memorylayer", "platform-server"])
++    assert any(g[1] == "_any_service" for g in legacy)
++    assert not any(g[1] == "_any_service" for g in restricted)
++    assert {g[1] for g in restricted if g[5].startswith(PREFIX)} == {
++        "sv::memorylayer::*", "sv::platform-server::*"}
++    levels = {g[:4]: g[4] for g in restricted}
++    assert all(levels[g[:4]] >= g[4] for g in legacy if g[1] != "_any_service")
++
++
++@pytest.mark.parametrize("raw", ["", "*", "memorylayer,sv::reader::*", "../reader"])
++def test_names_fail_closed(raw):
++    with pytest.raises(ValueError):
++        parse_trusted_services(raw)
++
++
++@pytest.mark.asyncio
++async def test_reconcile_verifies_replacements_before_removing_broad_grants():
++    desired = [("service", "sv::memorylayer::*", "kv_scope", "global", 40, PREFIX + "kv")]
++    old = NS(principal_type="wildcard", principal_id="_any_service", resource_type="kv_scope",
++             resource_id="global", granted_by="bootstrap", reason="legacy", rule_id="old")
++    admin = NS(list_acl_rules=AsyncMock(side_effect=[
++        NS(success=True, rules=[NS(access_level=40)]), NS(success=True, rules=[old]),
++        NS(success=True, rules=[])]), delete_acl_rule=AsyncMock(return_value=NS(success=True)))
++    await reconcile_service_policy(admin, desired, "bootstrap")
++    admin.delete_acl_rule.assert_awaited_once_with("old")
++
++
++@pytest.mark.asyncio
++async def test_reconcile_preserves_operator_broad_grant_and_reports_failure():
++    old = NS(principal_type="wildcard", principal_id="_any_service", resource_type="kv_scope",
++             resource_id="global", granted_by="operator", reason="custom", rule_id="old")
++    admin = NS(list_acl_rules=AsyncMock(return_value=NS(success=True, rules=[old])), delete_acl_rule=AsyncMock())
++    with pytest.raises(RuntimeError, match="operator review"):
++        await reconcile_service_policy(admin, [], "bootstrap")
++    admin.delete_acl_rule.assert_not_awaited()
++
++
++@pytest.mark.asyncio
++async def test_reconcile_does_not_remove_old_grants_if_replacement_is_missing():
++    desired = [("service", "sv::memorylayer::*", "kv_scope", "global", 40, PREFIX + "kv")]
++    admin = NS(list_acl_rules=AsyncMock(return_value=NS(success=True, rules=[])), delete_acl_rule=AsyncMock())
++    with pytest.raises(RuntimeError, match="read-back"):
++        await reconcile_service_policy(admin, desired, "bootstrap")
++    admin.delete_acl_rule.assert_not_awaited()
++
++def test_reader_cannot_be_trusted_and_key_patterns_are_bounded():
++    from scitrera_app_server.provisioning.service_acl_policy import parse_read_only_services, read_only_service_grants
++    with pytest.raises(ValueError):
++        parse_read_only_services('{"reader":["catalog/*"]}', ["reader"])
++    with pytest.raises(ValueError):
++        parse_read_only_services('{"reader":["*"]}', ["writer"])
++    grants = read_only_service_grants(parse_read_only_services('{"reader":["catalog/*"]}', ["writer"]))
++    assert {g[4] for g in grants} == {0, 10}
++    assert [g[3] for g in grants if g[4]] == ["catalog/*"]
++    assert all(g[1] == "sv::reader::*" for g in grants)
++
++@pytest.mark.parametrize("override", [
++    {"principal_id":"sv::*"},
++    {"resource_type":"admin"},
++    {"resource_id":"*"},
++    {"access_level":40},
++    {"access_level":True},
++])
++def test_explicit_grants_reject_blanket_or_admin_permissions(override):
++    import json
++    from scitrera_app_server.provisioning.service_acl_policy import parse_configured_service_grants
++    row = {"principal_id":"sv::tools-wss-client::*", "resource_type":"service_impl",
++           "resource_id":"platform-bridge", "access_level":20}
++    row.update(override)
++    with pytest.raises(ValueError):
++        parse_configured_service_grants(json.dumps([row]))
++
++
++def test_explicit_grants_have_no_default_and_preserve_subject_scope():
++    import json
++    from scitrera_app_server.provisioning.service_acl_policy import parse_configured_service_grants
++    assert parse_configured_service_grants(None) == []
++    resource="capability/exchange_authority_grants/default/user::alice@example.test"
++    grants=parse_configured_service_grants(json.dumps([{
++        "principal_id":"sv::tools-wss-client::*", "resource_type":"capability",
++        "resource_id":resource, "access_level":30}]))
++    assert len(grants)==1 and grants[0][3:5] == (resource, 30)
+diff --git a/backend/tests/_scitrera_app_server/websocket/test_web_agent_tool_catalog.py b/backend/tests/_scitrera_app_server/websocket/test_web_agent_tool_catalog.py
+index 6f4acff..d9c70a3 100644
+--- a/backend/tests/_scitrera_app_server/websocket/test_web_agent_tool_catalog.py
++++ b/backend/tests/_scitrera_app_server/websocket/test_web_agent_tool_catalog.py
+@@ -209,3 +209,44 @@ async def test_workspace_move_preserves_sequence_for_next_browser_heartbeat():
+     assert moved.sequence == 7
+     assert moved.context.workspace_id == "project-two"
+     assert client._web_tool_catalog_publication == moved
++
++
++@pytest.mark.asyncio
++async def test_initial_catalog_waits_for_human_workspace_session():
++    client = object.__new__(ClientInterface)
++    client._stream_client = None
++    client.workspace = None
++    client.window_id = WINDOW
++    client.user = MagicMock(id=USER)
++    client._web_tool_catalog_publication = None
++    client._web_tool_catalog_entries = {}
++    client._web_tool_catalog_lock = asyncio.Lock()
++    client._send_web_catalog_mutation = AsyncMock(return_value={})
++    grant = MagicMock(subject_type="user")
++    client._ensure_auth_ctx = AsyncMock(side_effect=[None, grant])
++
++    async def become_ready():
++        client._stream_client = object()
++        client.workspace = WORKSPACE
++        return True
++
++    client._await_auth_ctx = AsyncMock(side_effect=become_ready)
++    result = await client.on_ws_agent_tool_catalog(_snapshot())
++    assert result["published"] is True
++    client._await_auth_ctx.assert_awaited_once()
++    action, publication, context = client._send_web_catalog_mutation.await_args.args
++    assert action == "tool.catalog.publish"
++    assert context.workspace_id == WORKSPACE
++    assert context.surface_instance_id == WINDOW
++    assert publication.context.tool_host_id == browser_topic(USER, WINDOW)
++
++
++@pytest.mark.asyncio
++async def test_initial_catalog_fails_closed_without_human_session():
++    client = object.__new__(ClientInterface)
++    client._ensure_auth_ctx = AsyncMock(return_value=None)
++    client._await_auth_ctx = AsyncMock(return_value=False)
++    client._send_web_catalog_mutation = AsyncMock()
++    with pytest.raises(RuntimeError, match=ClientInterface.SESSION_NOT_READY_MESSAGE):
++        await client.on_ws_agent_tool_catalog(_snapshot())
++    client._send_web_catalog_mutation.assert_not_awaited()
+diff --git a/backend/tests/_scitrera_app_server/websocket/test_ws_chat_sahara.py b/backend/tests/_scitrera_app_server/websocket/test_ws_chat_sahara.py
+index 820eaff..2b4804a 100644
+--- a/backend/tests/_scitrera_app_server/websocket/test_ws_chat_sahara.py
++++ b/backend/tests/_scitrera_app_server/websocket/test_ws_chat_sahara.py
+@@ -672,7 +672,7 @@ async def test_ensure_sahara_sandbox_force_realloc_bypasses_cache():
+     """
+     pool, sahara_sandbox_client = _stub_sahara_pool(
+         sandbox_id='sb-fresh',
+-        proxy_api_key='',  # reattach-shaped handle; skips projection push
++        proxy_api_key='',  # reattach-shaped handle; projection refresh uses Aether
+     )
+ 
+     ci = _build_ci(tenant_pool=pool,
+@@ -864,7 +864,7 @@ async def test_ensure_sahara_sandbox_double_checked_lock_single_alloc():
+ 
+     pool, sahara_sandbox_client = _stub_sahara_pool(
+         sandbox_id='sb-once',
+-        proxy_api_key='',  # reattach-shaped; skips projection push
++        proxy_api_key='',  # reattach-shaped; projection refresh uses Aether
+     )
+ 
+     ci = _build_ci(tenant_pool=pool)
+@@ -1273,11 +1273,9 @@ async def test_ensure_sahara_sandbox_pushes_projection_with_skills_absent():
+ 
+ 
+ @pytest.mark.asyncio
+-async def test_ensure_sahara_sandbox_skips_push_when_no_proxy_api_key():
+-    """Reattach paths return a handle with an empty proxy_api_key — the
+-    push is skipped (the original alloc already pushed). The allocation
+-    itself must still succeed.
+-    """
++async def test_ensure_sahara_sandbox_refreshes_routing_without_proxy_api_key(monkeypatch):
++    """Reattachment refreshes operator routing through authenticated Aether."""
++    monkeypatch.setenv("SANDBOX_BLOB_FETCH_BASE_URL","http://downloads.example.test:8080")
+     pool, sahara_sandbox_client = _stub_sahara_pool(
+         sandbox_id='sb-reattached',
+         proxy_api_key='',
+@@ -1288,7 +1286,12 @@ async def test_ensure_sahara_sandbox_skips_push_when_no_proxy_api_key():
+     sandbox_id = await ci._ensure_sahara_sandbox()
+ 
+     assert sandbox_id == 'sb-reattached'
+-    sahara_sandbox_client._sdk._aether_client.send_message_to_agent.assert_not_awaited()
++    sent=sahara_sandbox_client._sdk._aether_client.send_message_to_agent
++    sent.assert_awaited_once()
++    import json
++    payload=json.loads(sent.await_args.kwargs['payload'])['arguments']['sidecar_config_apply']['proxy_config']
++    assert any('downloads' in rule for rule in payload['allowlist'])
++    assert sent.await_args.kwargs['specifier']=='sb-reattached'
+ 
+ 
+ @pytest.mark.asyncio
+@@ -1473,6 +1476,7 @@ async def test_missing_authority_does_not_reallocate_the_sandbox():
+     """
+     ci = _build_ci(sandbox_id='sb-live')
+     ci._ensure_auth_ctx = AsyncMock(return_value=None)
++    ci._await_auth_ctx = AsyncMock(return_value=False)
+     ci._ensure_sahara_sandbox = AsyncMock(return_value='sb-live')
+     ci._mint_chat_message_task = AsyncMock()
+ 
+@@ -1490,6 +1494,7 @@ async def test_missing_authority_reports_a_session_error_not_a_sandbox_one():
+     """The user should be pointed at the real cause."""
+     ci = _build_ci(sandbox_id='sb-live')
+     ci._ensure_auth_ctx = AsyncMock(return_value=None)
++    ci._await_auth_ctx = AsyncMock(return_value=False)
+     ci._emit_sahara_sandbox_unavailable = AsyncMock()
+ 
+     await ci._ws_chat_msg_sahara(
+@@ -1506,6 +1511,7 @@ async def test_onboarding_failure_is_not_shown_to_the_user():
+     put a chat error in front of a user who never sent a message."""
+     ci = _build_ci(sandbox_id='sb-live')
+     ci._ensure_auth_ctx = AsyncMock(return_value=None)
++    ci._await_auth_ctx = AsyncMock(return_value=False)
+     ci._emit_sahara_sandbox_unavailable = AsyncMock()
+ 
+     from scitrera_app_server.websocket.client_interface import ClientInterface
+@@ -1532,3 +1538,38 @@ async def test_a_real_user_turn_still_reports_sandbox_loss():
+ 
+     _, kwargs = ci._emit_sahara_sandbox_unavailable.await_args
+     assert kwargs['message'] == ci.SANDBOX_UNAVAILABLE_MESSAGE
++
++@pytest.mark.asyncio
++async def test_first_chat_waits_for_connecting_user_authority():
++    """A transient handshake delay must not drop the first real user turn."""
++    aether_client = AsyncMock()
++    ti = _stub_ti(aether_client)
++    ci = _build_ci(sandbox_id='sb-live')
++    grant = MagicMock()
++    grants = iter([None, None, grant])
++    ci._ensure_auth_ctx = AsyncMock(side_effect=lambda: next(grants, grant))
++    ci._ensure_sahara_sandbox = AsyncMock()
++    ci.switch_workspace = AsyncMock(return_value=(ti, 'default'))
++    ci._mint_chat_message_task = AsyncMock(
++        return_value=('task-first', 1234567890000, 'grant-first'),
++    )
++
++    await ci._ws_chat_msg_sahara({
++        'workspace': 'default', 'threadId': 'thread-first',
++        'message': _make_spec_user_message(
++            msg_id='msg-first', text='hello', workspace_id='default',
++            thread_id='thread-first',
++        ),
++    })
++
++    ci._ensure_sahara_sandbox.assert_not_awaited()
++    ci._mint_chat_message_task.assert_awaited_once()
++    aether_client.send_message_to_agent.assert_awaited_once()
++
++@pytest.mark.asyncio
++async def test_reattach_refreshes_operator_projection_without_task_token():
++    pool, _ = _stub_sahara_pool(sandbox_id='sb-reattach',proxy_api_key='')
++    ci = _build_ci(tenant_pool=pool)
++    ci._push_sahara_sidecar_projection = AsyncMock()
++    assert await ci._ensure_sahara_sandbox() == 'sb-reattach'
++    ci._push_sahara_sidecar_projection.assert_awaited_once_with(sandbox_id='sb-reattach',proxy_api_key='')
+diff --git a/backend/tests/_scitrera_app_server/websocket/test_ws_chat_thread_ownership.py b/backend/tests/_scitrera_app_server/websocket/test_ws_chat_thread_ownership.py
+index 64d4d50..911c0c6 100644
+--- a/backend/tests/_scitrera_app_server/websocket/test_ws_chat_thread_ownership.py
++++ b/backend/tests/_scitrera_app_server/websocket/test_ws_chat_thread_ownership.py
+@@ -21,7 +21,7 @@ def _make_client():
+     ci.user = MagicMock(id=USER_ID)
+     ci.switch_workspace = AsyncMock(return_value=(ti, WORKSPACE))
+     ci._display_ws = lambda workspace: workspace
+-    ci._ensure_auth_ctx = AsyncMock(return_value=None)
++    ci._ensure_auth_ctx = AsyncMock(return_value=MagicMock(grant_id="test-grant", subject_type="user", subject_id="alice@example.com"))
+     ci.logger = MagicMock()
+     ci._sahara_sandbox_id = ""
+     return ci, ti
+@@ -194,3 +194,37 @@ async def test_thread_list_children_fetch_by_parent():
+     assert result == [
+         {"id": "p::sub::1", "name": "Sub", "lastActivity": 9, "parentThreadId": "p"},
+     ]
++
++@pytest.mark.asyncio
++async def test_history_waits_for_user_session_and_keeps_user_authority():
++    from scitrera_app_server.tenant_api._request_context import current_auth_ctx
++    ci, ti = _make_client()
++    ctx = ci._ensure_auth_ctx.return_value
++    ci._ensure_auth_ctx.side_effect = [None, ctx]
++    ci._await_auth_ctx = AsyncMock(return_value=True)
++    async def history(*args, **kwargs):
++        assert current_auth_ctx() is ctx
++        return []
++    ti.get_chat_history.side_effect = history
++    result = await ci.on_ws_chat_history_request({"workspace": WORKSPACE})
++    ci._await_auth_ctx.assert_awaited_once()
++    assert result["messages"] == []
++    ti.get_chat_history.assert_awaited_once()
++
++
++@pytest.mark.asyncio
++@pytest.mark.parametrize("handler,payload", [
++    ("on_ws_chat_history_request", {"workspace": WORKSPACE}),
++    ("on_ws_chat_clear_request", {"workspace": WORKSPACE}),
++    ("on_ws_thread_add", {"workspaceId": WORKSPACE}),
++    ("on_ws_thread_list", {"workspaceId": WORKSPACE}),
++    ("on_ws_thread_rename", {"workspaceId": WORKSPACE, "threadId": THREAD_ID, "name": "renamed"}),
++    ("on_ws_thread_delete", {"workspaceId": WORKSPACE, "threadId": THREAD_ID}),
++])
++async def test_thread_operations_refuse_missing_user_authority(handler, payload):
++    ci, ti = _make_client()
++    ci._ensure_auth_ctx.return_value = None
++    ci._await_auth_ctx = AsyncMock(return_value=False)
++    with pytest.raises(RuntimeError, match="session"):
++        await getattr(ci, handler)(payload)
++    assert not ti.mock_calls, "Owner-scoped storage must never receive a service-identity fallback"
+diff --git a/backend/tests/_scitrera_app_server/websocket/test_ws_onboarding.py b/backend/tests/_scitrera_app_server/websocket/test_ws_onboarding.py
+index 394cd67..92f21b9 100644
+--- a/backend/tests/_scitrera_app_server/websocket/test_ws_onboarding.py
++++ b/backend/tests/_scitrera_app_server/websocket/test_ws_onboarding.py
+@@ -103,6 +103,7 @@ def _make_history_ci(records):
+     ci.user = MagicMock(id=USER_ID)
+     ci.logger = MagicMock()
+     ci._display_ws = lambda workspace: workspace
++    ci._ensure_auth_ctx = AsyncMock(return_value=MagicMock(grant_id="test-grant"))
+ 
+     ti = AsyncMock()
+     ti.get_chat_history = AsyncMock(return_value=records)
+diff --git a/backend/tests/_scitrera_app_server/websocket/test_ws_upload_download.py b/backend/tests/_scitrera_app_server/websocket/test_ws_upload_download.py
+index bf378f4..9c31b81 100644
+--- a/backend/tests/_scitrera_app_server/websocket/test_ws_upload_download.py
++++ b/backend/tests/_scitrera_app_server/websocket/test_ws_upload_download.py
+@@ -5,6 +5,7 @@ expected frontend-facing payload shapes: ``{url, fields, key}`` for
+ uploads, ``{url, key}`` for downloads.
+ """
+ import logging
++from contextlib import asynccontextmanager
+ import pytest
+ from unittest.mock import AsyncMock, MagicMock
+ 
+@@ -26,7 +27,14 @@ class FakeClientInterface:
+ 
+ @pytest.fixture
+ def mock_dc_client():
+-    return AsyncMock(spec=DataConnectorsClient)
++    dc = AsyncMock(spec=DataConnectorsClient)
++    @asynccontextmanager
++    async def bound(grant_id, subject):
++        assert grant_id == 'user-grant'
++        assert subject == ('user', 'alice')
++        yield dc
++    dc.acting_for = MagicMock(side_effect=bound)
++    return dc
+ 
+ 
+ @pytest.fixture
+@@ -176,6 +184,11 @@ def _make_ci(dc_client, ti):
+     ci.user = MagicMock()
+     ci.user.id = 'user:alice'
+     ci.logger = logging.getLogger('test_ws_upload_complete')
++    ci.user.email = 'alice@example.test'
++    ci._ensure_auth_ctx = AsyncMock(return_value=type('Grant', (), {
++        'grant_id':'user-grant', 'subject_type':'user', 'subject_id':'alice',
++    })())
++    ci._await_auth_ctx = AsyncMock(return_value=False)
+ 
+     async def _switch_workspace(ws):
+         return ti, (ws or 'default-ws')
+@@ -310,3 +323,38 @@ async def test_upload_complete_denied_without_write_permission(mock_dc_client, m
+         await ci.on_ws_upload_complete({'workspace': 'ws1', 'items': [{'vfs_ref': 'vfs_1'}]})
+ 
+     mock_dc_client.finalize_vfs_entry.assert_not_awaited()
++
++@pytest.mark.asyncio
++async def test_upload_handler_uses_user_authority(mock_dc_client, mock_ti):
++    ci = _make_ci(mock_dc_client, mock_ti)
++    mock_dc_client.mint_upload_url.return_value = {'upload_url':'https://example.test/u', 'vfs_ref':'vfs-new'}
++    result = await ci.on_ws_upload_request({'workspaceId':'ws1', 'fileName':'test.txt'})
++    assert result['key'] == 'vfs-new'
++    mock_dc_client.acting_for.assert_called_once_with('user-grant', ('user', 'alice'))
++    assert mock_dc_client.mint_upload_url.await_args.kwargs['workspace_id'] == 'ws1'
++
++
++@pytest.mark.asyncio
++async def test_download_handler_binds_user_and_subject(mock_dc_client, mock_ti):
++    ci = _make_ci(mock_dc_client, mock_ti)
++    mock_dc_client.mint_download_url.return_value = {'url':'https://example.test/d'}
++    await ci.on_ws_download_request({'workspaceId':'ws1', 'docId':'vfs-new'})
++    mock_dc_client.acting_for.assert_called_once_with('user-grant', ('user', 'alice'))
++    assert mock_dc_client.mint_download_url.await_args.kwargs['subject'] == 'alice@example.test'
++
++
++@pytest.mark.asyncio
++@pytest.mark.parametrize('method,payload', [
++    ('on_ws_upload_request', {'workspaceId':'ws1','fileName':'test.txt'}),
++    ('on_ws_download_request', {'workspaceId':'ws1','docId':'file'}),
++    ('on_ws_upload_complete', {'workspace':'ws1','items':[{'vfs_ref':'file'}]}),
++])
++async def test_file_handlers_fail_closed_without_user_grant(mock_dc_client, mock_ti, method, payload):
++    ci = _make_ci(mock_dc_client, mock_ti)
++    ci._ensure_auth_ctx.return_value = None
++    with pytest.raises(RuntimeError, match='session'):
++        await getattr(ci, method)(payload)
++    mock_dc_client.acting_for.assert_not_called()
++    mock_dc_client.mint_upload_url.assert_not_awaited()
++    mock_dc_client.mint_download_url.assert_not_awaited()
++    mock_dc_client.finalize_vfs_entry.assert_not_awaited()
+diff --git b/backend/tests/test_gateway_projection_config.py b/backend/tests/test_gateway_projection_config.py
+new file mode 100644
+index 0000000..4f11a7c
+--- /dev/null
++++ b/backend/tests/test_gateway_projection_config.py
+@@ -0,0 +1,56 @@
++"""Operator gateway settings must never silently downgrade authentication."""
++import pytest
++from scitrera_ai_intelligence.llm.sidecar_projection import _build_llm_virtual_rewrite, _gateway_route
++
++@pytest.fixture(autouse=True)
++def clean_env(monkeypatch):
++    for name in ("LLM_GATEWAY_BASE_URL", "LLM_GATEWAY_AUTH_MODE", "LLM_GATEWAY_BEARER_TOKEN_FILE"):
++        monkeypatch.delenv(name, raising=False)
++
++def test_bearer_projection_preserves_authoritative_attribution(tmp_path, monkeypatch):
++    token=tmp_path/"token"
++    token.write_text("synthetic-gateway-token-for-tests")
++    monkeypatch.setenv("LLM_GATEWAY_BEARER_TOKEN_FILE",str(token))
++    monkeypatch.setenv("LLM_GATEWAY_BASE_URL","https://gateway.example.test/models/v1")
++    rewrite=_build_llm_virtual_rewrite("alpha",user="alice@example.test",source="sahara")
++    route=rewrite["target_route_by_alias"]["sahara-default"]
++    assert route["host"]=="gateway.example.test"
++    assert route["scheme"]=="https"
++    assert route["path_prefix"]=="/models/v1"
++    assert route["headers"]=={"Authorization":"Bearer synthetic-gateway-token-for-tests",
++        "X-Scitrera-Tenant":"alpha","X-Scitrera-User":"alice@example.test","X-Scitrera-Source":"sahara"}
++
++def test_required_bearer_without_file_fails_closed(monkeypatch):
++    monkeypatch.setenv("LLM_GATEWAY_AUTH_MODE","bearer")
++    with pytest.raises(ValueError,match="requires"):_gateway_route()
++
++@pytest.mark.parametrize("value",["ftp://example.test","https://u:p@example.test","https://example.test?token=secret"])
++def test_invalid_gateway_address(value,monkeypatch):
++    monkeypatch.setenv("LLM_GATEWAY_BASE_URL",value)
++    with pytest.raises(ValueError):_gateway_route()
++
++def test_missing_or_empty_token_file_fails_closed(tmp_path,monkeypatch):
++    token=tmp_path/"missing"
++    monkeypatch.setenv("LLM_GATEWAY_BEARER_TOKEN_FILE",str(token))
++    with pytest.raises(FileNotFoundError):_gateway_route()
++    token.write_text("")
++    with pytest.raises(ValueError):_gateway_route()
++
++def test_blob_fetch_allowlist_is_bounded_to_the_configured_route(monkeypatch):
++    import re
++    from scitrera_ai_intelligence.llm.sidecar_projection import _blob_fetch_allowlist
++    monkeypatch.setenv("SANDBOX_BLOB_FETCH_BASE_URL","http://edge.example.test:8090/tenant")
++    pattern=_blob_fetch_allowlist()[0]
++    assert re.match(pattern,"http://edge.example.test:8090/tenant/blob/object?cap=synthetic")
++    for url in ["http://edge.example.test:8090/capabilities",
++                "http://edge.example.test:8090/tenant/revoke",
++                "http://edge.example.test.attacker.test:8090/tenant/blob/object",
++                "https://edge.example.test:8090/tenant/blob/object"]:
++        assert not re.match(pattern,url)
++
++@pytest.mark.parametrize("value",["file:///tmp/store","http://u:p@edge.test","http://edge.test?key=value","http://edge.test#blob","http://edge.test:invalid"])
++def test_invalid_blob_fetch_endpoint_fails_closed(value,monkeypatch):
++    from scitrera_ai_intelligence.llm.sidecar_projection import _blob_fetch_allowlist
++    monkeypatch.setenv("SANDBOX_BLOB_FETCH_BASE_URL",value)
++    with pytest.raises(ValueError):
++        _blob_fetch_allowlist()
+diff --git a/sandbox/components/execd/pkg/jupyter/client.go b/sandbox/components/execd/pkg/jupyter/client.go
+index 30d6c88..d2ecd82 100644
+--- a/sandbox/components/execd/pkg/jupyter/client.go
++++ b/sandbox/components/execd/pkg/jupyter/client.go
+@@ -182,17 +182,23 @@ func (c *Client) ConnectToKernel(kernelId string) error {
+ 		wsURL = fmt.Sprintf("%s?token=%s", wsURL, c.Auth.Token)
+ 	}
+ 
+-	if err := c.executeClient.Connect(wsURL); err != nil {
+-		return err
++	// Do not send user code until the new connection has demonstrated paired
++	// IOPUB delivery. A cold Jupyter connection can stall while the kernel itself
++	// stays healthy; reconnecting is safe here because only readiness probes have
++	// been sent. Never replay user execution to recover a connection.
++	var lastErr error
++	for attempt := 1; attempt <= 3; attempt++ {
++		if err := c.executeClient.Connect(wsURL); err != nil {
++			lastErr = err
++		} else if err := c.executeClient.WaitReady(execdflag.KernelReadyTimeout); err != nil {
++			lastErr = err
++			c.executeClient.Disconnect()
++		} else {
++			return nil
++		}
++		log.Warning("kernel %s connection readiness attempt %d failed", kernelId, attempt)
+ 	}
+-	// Gate on kernel iopub readiness before any execute_request rides this fresh
+-	// WS: closes the ZMQ slow-joiner window that silently drops stdout/result on a
+-	// cold per-exec reconnect. Non-fatal — the wait alone gives the SUB time to
+-	// join, so a timeout just proceeds (best-effort) rather than failing the run.
+-	if err := c.executeClient.WaitReady(execdflag.KernelReadyTimeout); err != nil {
+-		log.Warning("kernel %s iopub readiness gate: %v (proceeding)", kernelId, err)
+-	}
+-	return nil
++	return fmt.Errorf("kernel %s connection not ready after 3 attempts: %w", kernelId, lastErr)
+ }
+ 
+ // DisconnectFromKernel closes the websocket connection.
+diff --git a/sandbox/components/execd/pkg/jupyter/execute/execute.go b/sandbox/components/execd/pkg/jupyter/execute/execute.go
+index 9ccbec4..604c50e 100644
+--- a/sandbox/components/execd/pkg/jupyter/execute/execute.go
++++ b/sandbox/components/execd/pkg/jupyter/execute/execute.go
+@@ -124,8 +124,9 @@ func (c *Client) IsConnected() bool {
+ // fresh WS per execution, so without this gate a cold reconnect races the SUB
+ // join and silently drops output.
+ //
+-// Best-effort: on timeout it returns an error but the caller should proceed
+-// anyway — the wait itself gave the SUB time to join. timeout <= 0 skips the gate.
++// On timeout the caller must close this connection before retrying readiness.
++// No user code should run on a connection that failed this gate. timeout <= 0
++// explicitly disables the gate.
+ func (c *Client) WaitReady(timeout time.Duration) error {
+ 	if timeout <= 0 {
+ 		return nil
+diff --git b/sandbox/components/execd/pkg/jupyter/readiness_test.go b/sandbox/components/execd/pkg/jupyter/readiness_test.go
+new file mode 100644
+index 0000000..598fad4
+--- /dev/null
++++ b/sandbox/components/execd/pkg/jupyter/readiness_test.go
+@@ -0,0 +1,81 @@
++package jupyter
++
++import (
++	"net/http"
++	"net/http/httptest"
++	"sync/atomic"
++	"testing"
++	"time"
++
++	execdflag "github.com/alibaba/opensandbox/execd/pkg/flag"
++	"github.com/alibaba/opensandbox/execd/pkg/jupyter/execute"
++	"github.com/gorilla/websocket"
++	"github.com/stretchr/testify/require"
++)
++
++func TestConnectToKernelRetriesBeforeExecution(t *testing.T) {
++	previous := execdflag.KernelReadyTimeout
++	execdflag.KernelReadyTimeout = 50 * time.Millisecond
++	defer func() { execdflag.KernelReadyTimeout = previous }()
++	var connections, executions atomic.Int32
++	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
++		conn, err := (&websocket.Upgrader{}).Upgrade(w, r, nil)
++		if err != nil {
++			return
++		}
++		defer conn.Close()
++		number := connections.Add(1)
++		for {
++			var req execute.Message
++			if conn.ReadJSON(&req) != nil {
++				return
++			}
++			if req.Header.MessageType != "kernel_info_request" {
++				executions.Add(1)
++			}
++			if number == 1 {
++				continue
++			} // The first connection never delivers readiness.
++			_ = conn.WriteJSON(execute.Message{
++				Header: execute.Header{MessageType: "status"}, ParentHeader: req.Header,
++				Channel: "iopub", Content: []byte("{\"execution_state\":\"idle\"}"),
++			})
++		}
++	}))
++	defer server.Close()
++	client := NewClient(server.URL)
++	require.NoError(t, client.ConnectToKernel("cold"))
++	defer client.DisconnectFromKernel("cold")
++	require.EqualValues(t, 2, connections.Load())
++	require.Zero(t, executions.Load(), "readiness recovery must never execute user code")
++}
++
++func TestConnectToKernelRefusesUnreadyConnection(t *testing.T) {
++	previous := execdflag.KernelReadyTimeout
++	execdflag.KernelReadyTimeout = 20 * time.Millisecond
++	defer func() { execdflag.KernelReadyTimeout = previous }()
++	var connections, executions atomic.Int32
++	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
++		conn, err := (&websocket.Upgrader{}).Upgrade(w, r, nil)
++		if err != nil {
++			return
++		}
++		defer conn.Close()
++		connections.Add(1)
++		for {
++			var req execute.Message
++			if conn.ReadJSON(&req) != nil {
++				return
++			}
++			if req.Header.MessageType != "kernel_info_request" {
++				executions.Add(1)
++			}
++		}
++	}))
++	defer server.Close()
++	client := NewClient(server.URL)
++	require.ErrorContains(t, client.ConnectToKernel("unready"), "not ready after 3 attempts")
++	require.False(t, client.IsConnected())
++	require.EqualValues(t, 3, connections.Load())
++	require.Zero(t, executions.Load())
++}
+diff --git a/sandbox/images/sandbox-sidecar2/Dockerfile b/sandbox/images/sandbox-sidecar2/Dockerfile
+index aac9335..c72410f 100644
+--- a/sandbox/images/sandbox-sidecar2/Dockerfile
++++ b/sandbox/images/sandbox-sidecar2/Dockerfile
+@@ -1,4 +1,7 @@
+ # syntax=docker/dockerfile:1
++# Supply the tested Aether image containing the owning relay binary.
++ARG AETHER_IMAGE
++FROM ${AETHER_IMAGE} AS aether-relay
+ FROM docker.io/library/golang:1.26.8-bookworm@sha256:9fdc884aacc3bec89b20ffc69f4bb369c78210e3e4f600387b5128b12c199f81 AS build
+ ENV GOWORK=off
+ WORKDIR /src
+@@ -13,7 +16,8 @@ ARG SOURCE_REVISION=unknown
+ LABEL org.opencontainers.image.revision="${SOURCE_REVISION}"
+ COPY LICENSE LICENSES/Apache-2.0.txt NOTICE /usr/share/licenses/platform-backend/
+ COPY --from=build /out/sandbox-sidecar2 /usr/local/bin/sandbox-sidecar2
+-ENTRYPOINT ["/usr/local/bin/sandbox-sidecar2"]
++COPY --from=aether-relay /usr/local/bin/proxy-sidecar /usr/local/bin/proxy-sidecar
++ENTRYPOINT ["/usr/local/bin/sandbox-sidecar2", "boot"]
+ 
+ # Distribution notices include dependency texts; source remains component-licensed.
+ COPY LICENSE-MAP.json third-party-dependencies.json THIRD_PARTY_NOTICES.md sources.lock.json /usr/share/licenses/platform-backend/
+diff --git a/sandbox/images/sandbox-sidecar2/README.md b/sandbox/images/sandbox-sidecar2/README.md
+index ee6d544..aef82c2 100644
+--- a/sandbox/images/sandbox-sidecar2/README.md
++++ b/sandbox/images/sandbox-sidecar2/README.md
+@@ -7,3 +7,8 @@ Dependencies resolve through public Go pins. No Python sidecar or OpenClaw bridg
+ source is needed. The HTTP VFS adapter requires delegated turn context; see root
+ docs/development.md for the current integration boundary. Missing authority fails
+ closed. The authenticated platform-bridge RPC contract remains supported.
++
++The runnable image requires --build-arg AETHER_IMAGE=<pinned Aether image>.
++It consumes the component-owned /usr/local/bin/proxy-sidecar binary and starts
++boot, which establishes the relay before supervising the Go sidecar runtime.
++Record the Aether source revision/image digest alongside this image.
+diff --git a/sandbox/images/sandbox-sidecar2/internal/app/proxy_forward.go b/sandbox/images/sandbox-sidecar2/internal/app/proxy_forward.go
+index 5223977..b67fae8 100644
+--- a/sandbox/images/sandbox-sidecar2/internal/app/proxy_forward.go
++++ b/sandbox/images/sandbox-sidecar2/internal/app/proxy_forward.go
+@@ -68,6 +68,10 @@ func (p proxyAdapter) forwardHTTP(w http.ResponseWriter, r *http.Request, forwar
+ 	defer resp.Body.Close()
+ 
+ 	contentType := resp.Header.Get("Content-Type")
++	if strings.EqualFold(strings.TrimSpace(strings.Split(contentType, ";")[0]), "text/event-stream") {
++		p.forwardEventStream(w, r.Context(), resp, forward, p.usageForward(forward))
++		return
++	}
+ 	if shouldBufferForScrub(contentType) {
+ 		p.forwardScrubbed(w, r.Context(), resp, contentType, forward, p.usageForward(forward))
+ 		return
+diff --git b/sandbox/images/sandbox-sidecar2/internal/app/proxy_stream.go b/sandbox/images/sandbox-sidecar2/internal/app/proxy_stream.go
+new file mode 100644
+index 0000000..3519344
+--- /dev/null
++++ b/sandbox/images/sandbox-sidecar2/internal/app/proxy_stream.go
+@@ -0,0 +1,76 @@
++// SPDX-License-Identifier: AGPL-3.0-only
++
++package app
++
++import (
++	"bufio"
++	"context"
++	"io"
++	"net/http"
++
++	"github.com/scitrera/platform-backend/sandbox/images/sandbox-sidecar2/internal/proxy"
++	"github.com/scitrera/platform-backend/sandbox/images/sandbox-sidecar2/internal/usage"
++)
++
++// forwardEventStream scrubs whole SSE records before flushing them. Reading
++// complete records protects credential fields split across transport reads,
++// without waiting for the model to finish. Both record and usage buffers are
++// bounded; oversized records and transport errors terminate the stream.
++func (p proxyAdapter) forwardEventStream(w http.ResponseWriter, ctx context.Context, resp *http.Response, forward proxyForward, capture usageCapture) {
++	if encoding := unsupportedContentEncoding(resp.Header); encoding != "" {
++		writeProxyJSON(w, http.StatusBadGateway, map[string]any{"ok": false, "error": "unsupported encoded text response", "encoding": encoding})
++		return
++	}
++	copyHeaders(w.Header(), resp.Header)
++	stripHopHeaders(w.Header())
++	w.Header().Del("Content-Length")
++	w.WriteHeader(resp.StatusCode)
++	controller := http.NewResponseController(w)
++	scanner := bufio.NewScanner(resp.Body)
++	scanner.Buffer(make([]byte, 4096), maxBufferedTextResponse)
++	var record, captured []byte
++	captureComplete := true
++	flush := func() bool {
++		if len(record) == 0 {
++			return true
++		}
++		scrubbed, _ := proxy.ScrubResponse("text/event-stream", string(record), forward.cfg)
++		if _, err := io.WriteString(w, scrubbed); err != nil {
++			return false
++		}
++		if err := controller.Flush(); err != nil {
++			return false
++		}
++		if capture.matched && captureComplete {
++			if len(captured)+len(record) <= maxBufferedTextResponse {
++				captured = append(captured, record...)
++			} else {
++				// Never submit truncated usage as a complete provider response.
++				captured = nil
++				captureComplete = false
++			}
++		}
++		record = record[:0]
++		return true
++	}
++	for scanner.Scan() {
++		line := scanner.Bytes()
++		if len(record)+len(line)+1 > maxBufferedTextResponse {
++			return
++		}
++		record = append(record, line...)
++		record = append(record, '\n')
++		if len(line) == 0 && !flush() {
++			return
++		}
++	}
++	if scanner.Err() != nil || ctx.Err() != nil {
++		return
++	}
++	if !flush() {
++		return
++	}
++	if captureComplete {
++		capture.recordDetached(ctx, usage.Response{StatusCode: resp.StatusCode, ContentType: "text/event-stream", Body: captured})
++	}
++}
+diff --git b/sandbox/images/sandbox-sidecar2/internal/app/proxy_stream_test.go b/sandbox/images/sandbox-sidecar2/internal/app/proxy_stream_test.go
+new file mode 100644
+index 0000000..c1bacc3
+--- /dev/null
++++ b/sandbox/images/sandbox-sidecar2/internal/app/proxy_stream_test.go
+@@ -0,0 +1,95 @@
++// SPDX-License-Identifier: AGPL-3.0-only
++
++package app
++
++import (
++	"bufio"
++	"context"
++	"io"
++	"net/http"
++	"net/http/httptest"
++	"net/url"
++	"strconv"
++	"strings"
++	"testing"
++	"time"
++
++	"github.com/scitrera/platform-backend/sandbox/images/sandbox-sidecar2/internal/proxy"
++)
++
++func TestForwardEventStreamFlushesScrubbedRecordAndPropagatesCancellation(t *testing.T) {
++	upstreamCancelled := make(chan struct{})
++	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
++		w.Header().Set("Content-Type", "text/event-stream; charset=utf-8")
++		// Deliberately split a secret and a JSON credential field across reads.
++		for _, fragment := range []string{
++			"data: {\"text\":\"synthetic-",
++			"secret-value\",\"api_key\":\"another-secret-value\"}\n\n",
++		} {
++			_, _ = io.WriteString(w, fragment)
++			w.(http.Flusher).Flush()
++		}
++		<-r.Context().Done()
++		close(upstreamCancelled)
++	}))
++	defer upstream.Close()
++	u, _ := url.Parse(upstream.URL)
++	port, _ := strconv.Atoi(u.Port())
++	adapter := proxyAdapter{client: upstream.Client()}
++	forward := proxyForward{next: proxy.Request{Scheme: "http", Host: u.Hostname(), Port: port, Path: "/", Headers: http.Header{}},
++		cfg: proxy.Config{ScrubValues: []string{"synthetic-secret-value"}}}
++	downstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
++		adapter.forwardHTTP(w, r, forward)
++	}))
++	defer downstream.Close()
++	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
++	defer cancel()
++	request, _ := http.NewRequestWithContext(ctx, "GET", downstream.URL, nil)
++	response, err := downstream.Client().Do(request)
++	if err != nil {
++		t.Fatal(err)
++	}
++	defer response.Body.Close()
++	line, err := bufio.NewReader(response.Body).ReadString('\n')
++	if err != nil {
++		t.Fatal(err)
++	}
++	if strings.Contains(line, "secret") || strings.Count(line, "[REDACTED]") != 2 {
++		t.Fatalf("streaming credential filtering failed: %q", line)
++	}
++	if response.Header.Get("Content-Length") != "" {
++		t.Fatal("stream retained a content length")
++	}
++	cancel()
++	_ = response.Body.Close()
++	select {
++	case <-upstreamCancelled:
++	case <-time.After(2 * time.Second):
++		t.Fatal("downstream cancellation did not reach upstream")
++	}
++}
++
++func TestForwardEventStreamRejectsEncodedInputBeforeSendingHeaders(t *testing.T) {
++	recorder := httptest.NewRecorder()
++	response := &http.Response{StatusCode: 200, Header: http.Header{"Content-Encoding": []string{"gzip"}}, Body: io.NopCloser(strings.NewReader("encoded"))}
++	proxyAdapter{}.forwardEventStream(recorder, context.Background(), response, proxyForward{}, usageCapture{})
++	if recorder.Code != http.StatusBadGateway {
++		t.Fatalf("status=%d", recorder.Code)
++	}
++	if strings.Contains(recorder.Body.String(), "encoded\"") {
++		t.Fatal("encoded body leaked")
++	}
++}
++
++func TestForwardEventStreamPreservesFrameBoundaries(t *testing.T) {
++	recorder := httptest.NewRecorder()
++	body := "data: one\r\n\r\ndata: two\n\ndata: [DONE]\n\n"
++	response := &http.Response{StatusCode: 200, Header: http.Header{}, Body: io.NopCloser(strings.NewReader(body))}
++	proxyAdapter{}.forwardEventStream(recorder, context.Background(), response, proxyForward{}, usageCapture{})
++	if recorder.Body.String() != strings.ReplaceAll(body, "\r\n", "\n") {
++		t.Fatalf("SSE framing changed: %q", recorder.Body.String())
++	}
++	if !recorder.Flushed {
++		t.Fatal("event stream was never flushed")
++	}
++}
+diff --git a/sandbox-provider/cmd/sandbox-service/main.go b/sandbox-provider/cmd/sandbox-service/main.go
+index b03f6f6..d1f238f 100644
+--- a/sandbox-provider/cmd/sandbox-service/main.go
++++ b/sandbox-provider/cmd/sandbox-service/main.go
+@@ -1220,14 +1220,16 @@ func newBaseProvider(cfg config.Config, snapStore snapshot.SnapshotStore) (provi
+ 	switch cfg.Provider {
+ 	case config.ProviderDocker:
+ 		return docker.New(docker.ProviderConfig{
+-			SandboxImage:  cfg.SandboxImage,
+-			DataDir:       cfg.SandboxDataDir,
+-			MemoryLimit:   cfg.MemoryLimit,
+-			NanoCPUs:      int64(cfg.CPULimit * 1e9),
+-			PidsLimit:     cfg.PidsLimit,
+-			WarmPoolSize:  cfg.WarmPoolSize,
+-			AutoRestore:   true,
+-			SnapshotStore: snapStore,
++			ControlContainer: os.Getenv("SANDBOX_DOCKER_CONTROL_CONTAINER"),
++			InstanceID:       os.Getenv("SANDBOX_DOCKER_INSTANCE"),
++			SandboxImage:     cfg.SandboxImage,
++			DataDir:          cfg.SandboxDataDir,
++			MemoryLimit:      cfg.MemoryLimit,
++			NanoCPUs:         int64(cfg.CPULimit * 1e9),
++			PidsLimit:        cfg.PidsLimit,
++			WarmPoolSize:     cfg.WarmPoolSize,
++			AutoRestore:      true,
++			SnapshotStore:    snapStore,
+ 
+ 			DefaultImagePullPolicy:    cfg.DefaultImagePullPolicy,
+ 			AllowLocalFallbackDefault: cfg.AllowLocalFallbackDefault,
+@@ -1235,6 +1237,8 @@ func newBaseProvider(cfg config.Config, snapStore snapshot.SnapshotStore) (provi
+ 		})
+ 	case config.ProviderK8s:
+ 		return k8s.New(k8s.ProviderConfig{
++			SandboxServiceAccount:     os.Getenv("SANDBOX_K8S_SANDBOX_SERVICE_ACCOUNT"),
++			SingleNamespace:           os.Getenv("SANDBOX_K8S_SINGLE_NAMESPACE") == "true",
+ 			SandboxImage:              cfg.SandboxImage,
+ 			Namespace:                 cfg.K8sNamespace,
+ 			KubeconfigPath:            cfg.K8sKubeconfigPath,
+diff --git a/sandbox-provider/internal/provider/docker/network.go b/sandbox-provider/internal/provider/docker/network.go
+index addb633..02e7e6f 100644
+--- a/sandbox-provider/internal/provider/docker/network.go
++++ b/sandbox-provider/internal/provider/docker/network.go
+@@ -93,3 +93,11 @@ func buildSidecarBackendsJSON(sandboxName string) (string, error) {
+ 	}
+ 	return string(data), nil
+ }
++
++// Detach only this configured provider endpoint before deleting its sandbox bridge.
++func (p *Provider) removeNetwork(ctx context.Context, name string) {
++	if p.cfg.ControlContainer != "" {
++		_ = p.docker.NetworkDisconnect(ctx, name, p.cfg.ControlContainer, true)
++	}
++	removeNetwork(ctx, p.docker, name)
++}
+diff --git a/sandbox-provider/internal/provider/docker/provider.go b/sandbox-provider/internal/provider/docker/provider.go
+index 4020a82..dad4ffc 100644
+--- a/sandbox-provider/internal/provider/docker/provider.go
++++ b/sandbox-provider/internal/provider/docker/provider.go
+@@ -20,6 +20,7 @@ import (
+ 	"github.com/docker/docker/api/types/filters"
+ 	dockernetwork "github.com/docker/docker/api/types/network"
+ 	dockerclient "github.com/docker/docker/client"
++	"github.com/docker/docker/errdefs"
+ 	"github.com/docker/go-connections/nat"
+ 	"github.com/google/uuid"
+ 
+@@ -50,9 +51,10 @@ const (
+ 	// The label key stays "scitrera.thread_id" for one release so existing tooling
+ 	// and reconcile queries continue to work.
+ 	// TODO(owner_key-migration): rename label key to scitrera.owner_key.
+-	labelThreadID = "scitrera.thread_id"
+-	labelTenantID = "scitrera.tenant_id"
+-	labelRole     = "scitrera.role"
++	labelThreadID   = "scitrera.thread_id"
++	labelTenantID   = "scitrera.tenant_id"
++	labelInstanceID = "scitrera.instance_id"
++	labelRole       = "scitrera.role"
+ 	// labelAetherEndpoint records the tenant's Aether gateway address on the
+ 	// container so reconcile and ops tooling can correlate sandboxes to tenants.
+ 	labelAetherEndpoint = "scitrera.aether_endpoint"
+@@ -67,6 +69,11 @@ const (
+ // ProviderConfig holds all construction-time knobs for the Docker provider.
+ // Populated from config.Config by New.
+ type ProviderConfig struct {
++	// ControlContainer is the Compose provider container to attach to each
++	// private sandbox bridge. Host-native providers leave it empty.
++	ControlContainer string
++	// InstanceID confines discovery/cleanup to one installation on a shared daemon.
++	InstanceID string
+ 	// SandboxImage is the container image to run for sandbox containers.
+ 	SandboxImage string
+ 	// DataDir is the host directory under which per-thread workspace volumes live.
+@@ -383,7 +390,7 @@ func (p *Provider) Destroy(ctx context.Context, sandboxID string) error {
+ 		if name == "" {
+ 			continue
+ 		}
+-		removeNetwork(ctx, p.docker, name)
++		p.removeNetwork(ctx, name)
+ 	}
+ 
+ 	slog.InfoContext(ctx, "destroyed sandbox", "sandbox_id", sandboxID)
+@@ -549,10 +556,30 @@ func (p *Provider) createContainer(ctx context.Context, in createContainerInput)
+ 	// sidecar.BuildEnv. Removed to keep the sandbox env minimal.
+ 
+ 	ci := containerInfo{
+-		sandboxName: sandboxName,
+ 		accessToken: accessToken,
+ 	}
+ 
++	created := false
++	defer func() {
++		if created {
++			return
++		}
++		cleanupCtx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
++		defer cancel()
++		for _, name := range []string{ci.sandboxName, ci.codeSidecarName, ci.sidecarName} {
++			if name != "" {
++				if err := p.docker.ContainerRemove(cleanupCtx, name, container.RemoveOptions{Force: true}); err != nil && !errdefs.IsNotFound(err) {
++					slog.WarnContext(cleanupCtx, "failed allocation container cleanup", "name", name, "error", err)
++				}
++			}
++		}
++		for _, name := range []string{ci.networkName, ci.egressName} {
++			if name != "" {
++				p.removeNetwork(cleanupCtx, name)
++			}
++		}
++	}()
++
+ 	useSidecar := p.cfg.SidecarCfg.Enabled && in.sidecarIdentity != nil
+ 
+ 	var baseURL string
+@@ -631,6 +658,7 @@ func (p *Provider) createContainer(ctx context.Context, in createContainerInput)
+ 		liveness:      resolveLiveness(in.liveness, image),
+ 	}
+ 	p.lastActivity[in.sandboxID] = time.Now()
++	created = true
+ 	if in.ownerKey != warmOwnerKey {
+ 		p.ownerToSandbox[in.ownerKey] = in.sandboxID
+ 	}
+@@ -710,7 +738,7 @@ func (p *Provider) createWithSidecar(ctx context.Context, in createSidecarInput)
+ 
+ 	egressLabels := mapMerge(in.labels, map[string]string{labelRole: "egress-network"})
+ 	if err := createEgressNetwork(ctx, p.docker, egressName, egressLabels); err != nil {
+-		removeNetwork(ctx, p.docker, networkName)
++		p.removeNetwork(ctx, networkName)
+ 		return "", err
+ 	}
+ 	in.ci.egressName = egressName
+@@ -798,9 +826,6 @@ func (p *Provider) createWithSidecar(ctx context.Context, in createSidecarInput)
+ 	if err != nil {
+ 		return "", fmt.Errorf("create sidecar container: %w", err)
+ 	}
+-	if err := p.docker.ContainerStart(ctx, sidecarResp.ID, container.StartOptions{}); err != nil {
+-		return "", fmt.Errorf("start sidecar container: %w", err)
+-	}
+ 	in.ci.sidecarName = in.sidecarName
+ 
+ 	// Attach sidecar to the egress network for outbound internet access.
+@@ -821,6 +846,12 @@ func (p *Provider) createWithSidecar(ctx context.Context, in createSidecarInput)
+ 		}
+ 	}
+ 
++	// Establish all DNS-visible networks before booting the relay. An early
++	// failed upstream dial can otherwise strand its first multiplexed requests.
++	if err := p.docker.ContainerStart(ctx, sidecarResp.ID, container.StartOptions{}); err != nil {
++		return "", fmt.Errorf("start sidecar container: %w", err)
++	}
++
+ 	if err := p.waitForContainer(ctx, sidecarResp.ID, in.sidecarName); err != nil {
+ 		return "", err
+ 	}
+@@ -830,6 +861,10 @@ func (p *Provider) createWithSidecar(ctx context.Context, in createSidecarInput)
+ 	// most other tooling uses uppercase.
+ 	proxyURL := fmt.Sprintf("http://%s:%d", in.sidecarName, proxyPort)
+ 	noProxy := fmt.Sprintf("localhost,127.0.0.1,%s", in.sidecarName)
++	// execd is a private peer on this sandbox bridge, not an egress destination.
++	if strings.TrimSpace(in.codeSidecarImage) != "" {
++		noProxy += "," + in.codeSidecarName
++	}
+ 	in.sandboxEnv["HTTP_PROXY"] = proxyURL
+ 	in.sandboxEnv["HTTPS_PROXY"] = proxyURL
+ 	in.sandboxEnv["http_proxy"] = proxyURL
+@@ -897,10 +932,10 @@ func (p *Provider) createWithSidecar(ctx context.Context, in createSidecarInput)
+ 		if err != nil {
+ 			return "", fmt.Errorf("create code-sidecar container: %w", err)
+ 		}
++		in.ci.codeSidecarName = in.codeSidecarName
+ 		if err := p.docker.ContainerStart(ctx, codeResp.ID, container.StartOptions{}); err != nil {
+ 			return "", fmt.Errorf("start code-sidecar container: %w", err)
+ 		}
+-		in.ci.codeSidecarName = in.codeSidecarName
+ 		// Only wait for the container to reach "running" — NOT for execd to come
+ 		// up. The harness retries the execd connect on first tool use.
+ 		if err := p.waitForContainer(ctx, codeResp.ID, in.codeSidecarName); err != nil {
+@@ -942,6 +977,7 @@ func (p *Provider) createWithSidecar(ctx context.Context, in createSidecarInput)
+ 	if err != nil {
+ 		return "", fmt.Errorf("create sandbox container: %w", err)
+ 	}
++	in.ci.sandboxName = in.sandboxName
+ 	if err := p.docker.ContainerStart(ctx, sandboxResp.ID, container.StartOptions{}); err != nil {
+ 		return "", fmt.Errorf("start sandbox container: %w", err)
+ 	}
+@@ -959,6 +995,11 @@ func (p *Provider) createWithSidecar(ctx context.Context, in createSidecarInput)
+ 		return "", fmt.Errorf("cannot determine IP for %s on %s", in.sandboxName, networkName)
+ 	}
+ 
++	if p.cfg.ControlContainer != "" {
++		if err := attachContainerToNetwork(ctx, p.docker, networkName, p.cfg.ControlContainer); err != nil {
++			return "", fmt.Errorf("attach provider control container: %w", err)
++		}
++	}
+ 	return fmt.Sprintf("http://%s:%d", netSettings.IPAddress, execdPort), nil
+ }
+ 
+@@ -1008,6 +1049,7 @@ func (p *Provider) createWithoutProxy(ctx context.Context, in createNoProxyInput
+ 	if err != nil {
+ 		return "", fmt.Errorf("create sandbox container: %w", err)
+ 	}
++	in.ci.sandboxName = in.sandboxName
+ 	if err := p.docker.ContainerStart(ctx, resp.ID, container.StartOptions{}); err != nil {
+ 		return "", fmt.Errorf("start sandbox container: %w", err)
+ 	}
+@@ -1024,7 +1066,6 @@ func (p *Provider) createWithoutProxy(ctx context.Context, in createNoProxyInput
+ 	if len(bindings) == 0 {
+ 		return "", fmt.Errorf("sandbox container %s has no exposed port", in.sandboxName)
+ 	}
+-	in.ci.sandboxName = in.sandboxName
+ 	return fmt.Sprintf("http://localhost:%s", bindings[0].HostPort), nil
+ }
+ 
+@@ -1174,6 +1215,9 @@ func (p *Provider) containerLogs(ctx context.Context, containerID string, tail i
+ func (p *Provider) ListByLabel(ctx context.Context) ([]container.Summary, error) {
+ 	f := filters.NewArgs()
+ 	f.Add("label", labelSandboxID)
++	if p.cfg.InstanceID != "" {
++		f.Add("label", labelInstanceID+"="+p.cfg.InstanceID)
++	}
+ 	if p.cfg.TenantID != "" {
+ 		f.Add("label", fmt.Sprintf("%s=%s", labelTenantID, p.cfg.TenantID))
+ 	}
+@@ -1232,6 +1276,9 @@ func (p *Provider) baseLabels(sandboxID, ownerKey, tenant string) map[string]str
+ 	labels := map[string]string{
+ 		labelSandboxID: sandboxID,
+ 	}
++	if p.cfg.InstanceID != "" {
++		labels[labelInstanceID] = p.cfg.InstanceID
++	}
+ 	if ownerKey != "" {
+ 		// Label key stays "scitrera.thread_id" for one release.
+ 		// TODO(owner_key-migration): rename label key to scitrera.owner_key.
+diff --git a/sandbox-provider/internal/provider/docker/reconcile.go b/sandbox-provider/internal/provider/docker/reconcile.go
+index 880a585..71ba696 100644
+--- a/sandbox-provider/internal/provider/docker/reconcile.go
++++ b/sandbox-provider/internal/provider/docker/reconcile.go
+@@ -65,6 +65,24 @@ func (p *Provider) Reconcile(ctx context.Context, scope provider.ReconcileScope)
+ 	seenContainers := map[string]struct{}{}
+ 	for sandboxID, c := range containersByID {
+ 		seenContainers[sandboxID] = struct{}{}
++		// Create holds this same owner lock until startup/restore completes and
++		// the sandbox is tracked. A container without a KV row during that window
++		// is expected, not an orphan. Hold acquired locks through reconciliation
++		// so a new Create cannot race adoption/removal for this owner either.
++		if owner := c.Labels[labelThreadID]; owner != "" {
++			ownerLock := p.lockForOwner(owner)
++			if !ownerLock.TryLock() {
++				continue
++			}
++			defer ownerLock.Unlock()
++		}
++		// Create may have completed after the initial tracked snapshot.
++		p.mu.RLock()
++		_, nowTracked := p.sandboxes[sandboxID]
++		p.mu.RUnlock()
++		if nowTracked {
++			continue
++		}
+ 		if _, alreadyTracked := tracked[sandboxID]; alreadyTracked {
+ 			continue
+ 		}
+@@ -151,6 +169,9 @@ func (p *Provider) reapOrphanNetworks(ctx context.Context, tenantID string, seen
+ 	// are still candidates (single-tenant back-compat).
+ 	f := filters.NewArgs()
+ 	f.Add("label", labelSandboxID)
++	if p.cfg.InstanceID != "" {
++		f.Add("label", labelInstanceID+"="+p.cfg.InstanceID)
++	}
+ 	nets, err := p.docker.NetworkList(ctx, dockernetwork.ListOptions{Filters: f})
+ 	if err != nil {
+ 		slog.WarnContext(ctx, "reconcile: list networks for orphan reap failed", "err", err)
+@@ -179,14 +200,20 @@ func (p *Provider) reapOrphanNetworks(ctx context.Context, tenantID string, seen
+ 			continue
+ 		}
+ 		info, ierr := p.docker.NetworkInspect(ctx, n.ID, dockernetwork.InspectOptions{})
+-		if ierr == nil && len(info.Containers) > 0 {
++		activeEndpoints := 0
++		for _, endpoint := range info.Containers {
++			if endpoint.Name != p.cfg.ControlContainer {
++				activeEndpoints++
++			}
++		}
++		if ierr == nil && activeEndpoints > 0 {
+ 			slog.DebugContext(ctx, "reconcile: skipping network with attached containers",
+ 				"name", n.Name, "sandbox_id", sid, "attached", len(info.Containers))
+ 			continue
+ 		}
+ 		slog.InfoContext(ctx, "reconcile: removing orphan sandbox network",
+ 			"name", n.Name, "sandbox_id", sid, "role", n.Labels[labelRole], "age", age.String())
+-		removeNetwork(ctx, p.docker, n.Name)
++		p.removeNetwork(ctx, n.Name)
+ 	}
+ }
+ 
+@@ -209,6 +236,9 @@ func (p *Provider) reapOrphanNetworks(ctx context.Context, tenantID string, seen
+ func (p *Provider) listSandboxContainersForTenant(ctx context.Context, tenantID string) ([]container.Summary, error) {
+ 	f := filters.NewArgs()
+ 	f.Add("label", labelSandboxID)
++	if p.cfg.InstanceID != "" {
++		f.Add("label", labelInstanceID+"="+p.cfg.InstanceID)
++	}
+ 	all, err := p.docker.ContainerList(ctx, container.ListOptions{All: true, Filters: f})
+ 	if err != nil {
+ 		return nil, err
+@@ -386,7 +416,7 @@ func (p *Provider) destroyOrphan(ctx context.Context, c container.Summary) error
+ 		if name == "" {
+ 			continue
+ 		}
+-		removeNetwork(ctx, p.docker, name)
++		p.removeNetwork(ctx, name)
+ 	}
+ 	return nil
+ }
+diff --git b/sandbox-provider/internal/provider/docker/reconcile_creation_test.go b/sandbox-provider/internal/provider/docker/reconcile_creation_test.go
+new file mode 100644
+index 0000000..1235c72
+--- /dev/null
++++ b/sandbox-provider/internal/provider/docker/reconcile_creation_test.go
+@@ -0,0 +1,124 @@
++package docker
++
++import (
++	"context"
++	"encoding/json"
++	"net/http"
++	"net/http/httptest"
++	"strings"
++	"sync/atomic"
++	"testing"
++
++	"github.com/docker/docker/api/types/container"
++	dockerclient "github.com/docker/docker/client"
++	"github.com/scitrera/platform-backend/sandbox-provider/internal/provider"
++	"github.com/scitrera/platform-backend/sandbox-provider/internal/provider/sidecar"
++	"github.com/scitrera/platform-backend/sandbox-provider/internal/state"
++)
++
++// A running Create has created its Docker container but has not yet returned
++// a ready handle or persisted the KV record. Reconcile must leave it alone.
++func TestReconcilePreservesCreationInProgress(t *testing.T) {
++	var removals atomic.Int32
++	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
++		w.Header().Set("Content-Type", "application/json")
++		switch {
++		case strings.HasSuffix(r.URL.Path, "/containers/json"):
++			_ = json.NewEncoder(w).Encode([]container.Summary{{ID: "synthetic-starting", Labels: map[string]string{
++				labelSandboxID: "starting", labelRole: "sandbox", labelThreadID: "user:synthetic", labelTenantID: "alpha",
++			}}})
++		case r.Method == http.MethodDelete:
++			removals.Add(1)
++			w.WriteHeader(http.StatusNoContent)
++		case strings.HasSuffix(r.URL.Path, "/networks"):
++			_, _ = w.Write([]byte("[]"))
++		default:
++			t.Errorf("unexpected Docker request: %s %s", r.Method, r.URL.Path)
++			w.WriteHeader(http.StatusNotFound)
++		}
++	}))
++	defer server.Close()
++	client, err := dockerclient.NewClientWithOpts(dockerclient.WithHost(server.URL), dockerclient.WithVersion("1.47"))
++	if err != nil {
++		t.Fatal(err)
++	}
++	defer client.Close()
++	p := &Provider{docker: client, sandboxes: map[string]*sandboxRecord{}}
++	lock := p.lockForOwner("user:synthetic")
++	lock.Lock()
++	defer lock.Unlock()
++	if err := p.Reconcile(context.Background(), provider.ReconcileScope{TenantID: "alpha", KV: state.NewMemoryKV()}); err != nil {
++		t.Fatal(err)
++	}
++	if removals.Load() != 0 {
++		t.Fatalf("reconcile removed %d resources during Create", removals.Load())
++	}
++}
++
++func TestBaseLabelsScopeInstallationAndTenant(t *testing.T) {
++	p := &Provider{cfg: ProviderConfig{InstanceID: "integration-example", TenantID: "fallback"}}
++	labels := p.baseLabels("sandbox-id", "owner", "alpha")
++	if labels[labelInstanceID] != "integration-example" || labels[labelTenantID] != "alpha" {
++		t.Fatalf("ownership labels: %#v", labels)
++	}
++}
++
++func TestFailedAllocationConnectsNetworkBeforeStartAndCleansPeers(t *testing.T) {
++	attached := false
++	started := false
++	removed := map[string]bool{}
++	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
++		w.Header().Set("Content-Type", "application/json")
++		switch {
++		case strings.HasSuffix(r.URL.Path, "/networks/create"):
++			_, _ = w.Write([]byte("{\"Id\":\"network\"}"))
++		case strings.HasSuffix(r.URL.Path, "/containers/create"):
++			_, _ = w.Write([]byte("{\"Id\":\"sidecar\"}"))
++		case strings.HasSuffix(r.URL.Path, "/connect"):
++			if strings.Contains(r.URL.Path, "/tenant-alpha/") {
++				attached = true
++			}
++			w.WriteHeader(http.StatusOK)
++		case strings.HasSuffix(r.URL.Path, "/start"):
++			started = true
++			if !attached {
++				t.Error("relay started before its Aether network was attached")
++			}
++			w.WriteHeader(http.StatusInternalServerError)
++			_, _ = w.Write([]byte("{\"message\":\"synthetic failed start\"}"))
++		case r.Method == http.MethodDelete:
++			removed[r.URL.Path] = true
++			w.WriteHeader(http.StatusNoContent)
++		default:
++			t.Errorf("unexpected Docker request: %s %s", r.Method, r.URL.Path)
++			w.WriteHeader(http.StatusNotFound)
++		}
++	}))
++	defer server.Close()
++	client, err := dockerclient.NewClientWithOpts(dockerclient.WithHost(server.URL), dockerclient.WithVersion("1.47"))
++	if err != nil {
++		t.Fatal(err)
++	}
++	defer client.Close()
++	p := &Provider{docker: client, cfg: ProviderConfig{
++		DataDir: t.TempDir(), SidecarCfg: sidecar.SandboxSidecarConfig{Enabled: true, Image: "synthetic-sidecar", AetherNetwork: "tenant-alpha"},
++	}}
++	_, _, err = p.createContainer(context.Background(), createContainerInput{
++		sandboxID: "123456789012-rest", ownerKey: "user:synthetic", image: "sahara:fixture",
++		sidecarIdentity: &sidecar.SidecarIdentity{},
++	})
++	if err == nil || !started {
++		t.Fatalf("expected injected startup failure: %v", err)
++	}
++	for _, suffix := range []string{"/containers/scitrera-sidecar-123456789012", "/networks/scitrera-sandbox-net-123456789012", "/networks/scitrera-egress-net-123456789012"} {
++		found := false
++		for path := range removed {
++			if strings.HasSuffix(path, suffix) {
++				found = true
++			}
++		}
++		if !found {
++			t.Errorf("failed allocation retained %s", suffix)
++		}
++	}
++}
+diff --git a/sandbox-provider/internal/provider/iface.go b/sandbox-provider/internal/provider/iface.go
+index 10c0650..88abf82 100644
+--- a/sandbox-provider/internal/provider/iface.go
++++ b/sandbox-provider/internal/provider/iface.go
+@@ -69,21 +69,16 @@ const (
+ 	SandboxClassHardened = "hardened"
+ )
+ 
+-const (
+-	saharaImageSubstr = "scitrera/agent-harness"
+-)
+-
+-// IsSaharaImage recognizes the retained legacy image identity and the candidate
+-// repository's Sahara image. Code sidecars remain execd images.
++// IsSaharaImage recognizes the runtime repository basename across registries.
++// A tag or digest does not change the runtime contract. In particular the code
++// sidecar and similarly named images must keep the execd contract.
+ func IsSaharaImage(image string) bool {
+-	if strings.Contains(image, saharaImageSubstr) {
+-		return true
+-	}
+ 	repository := strings.SplitN(image, "@", 2)[0]
+ 	if colon := strings.LastIndex(repository, ":"); colon > strings.LastIndex(repository, "/") {
+ 		repository = repository[:colon]
+ 	}
+-	return repository == "platform-backend/sahara" || strings.HasSuffix(repository, "/platform-backend/sahara")
++	name := repository[strings.LastIndex(repository, "/")+1:]
++	return name == "sahara" || name == "agent-harness"
+ }
+ 
+ func InferLiveness(image string) string {
+diff --git a/sandbox-provider/internal/provider/image_identity_test.go b/sandbox-provider/internal/provider/image_identity_test.go
+index ca84287..cda6ce4 100644
+--- a/sandbox-provider/internal/provider/image_identity_test.go
++++ b/sandbox-provider/internal/provider/image_identity_test.go
+@@ -2,17 +2,20 @@ package provider
+ 
+ import "testing"
+ 
+-func TestCandidateImageIdentityKeepsCodeImagesOnExecd(t *testing.T) {
+-	for image, want := range map[string]string{
+-		"platform-backend/sahara:review":                      "sidecar",
+-		"ghcr.io/scitrera/platform-backend/sahara@sha256:abc": "sidecar",
+-		"registry.example.test/scitrera/agent-harness:legacy": "sidecar",
+-		"platform-backend/sahara-code-sidecar:review":         "execd",
+-		"platform-backend/code-interpreter:review":            "execd",
+-		"platform-backend/sahara-other:review":                "execd",
++func TestSaharaRuntimeImageIdentity(t *testing.T) {
++	for image, want := range map[string]bool{
++		"platform-backend/sahara:review":                     true,
++		"platform-integration/sahara:content-hash":           true,
++		"registry.example.test:5000/team/sahara@sha256:abcd": true,
++		"registry.example.test/team/agent-harness:v1":        true,
++		"sahara": true,
++		"platform-backend/sahara-code-sidecar:review":           false,
++		"registry.example.test/scitrera/agent-harness-code:tag": false,
++		"registry.example.test/team/other:sahara":               false,
++		"sha256:abcd": false,
+ 	} {
+-		if got := InferLiveness(image); got != want {
+-			t.Errorf("InferLiveness(%q)=%q, want %q", image, got, want)
++		if got := IsSaharaImage(image); got != want {
++			t.Errorf("IsSaharaImage(%q)=%v, want %v", image, got, want)
+ 		}
+ 	}
+ }
+diff --git a/sandbox-provider/internal/provider/k8s/provider.go b/sandbox-provider/internal/provider/k8s/provider.go
+index 4c60ebd..dad31a0 100644
+--- a/sandbox-provider/internal/provider/k8s/provider.go
++++ b/sandbox-provider/internal/provider/k8s/provider.go
+@@ -114,13 +114,16 @@ const (
+ 
+ // ProviderConfig holds construction-time knobs.
+ type ProviderConfig struct {
+-	SandboxImage   string
+-	Namespace      string
+-	KubeconfigPath string // empty = in-cluster
+-	MemoryRequest  string
+-	MemoryLimit    string
+-	CPURequest     string
+-	CPULimit       string
++	// SingleNamespace confines discovery to the pre-provisioned Namespace.
++	SingleNamespace       bool
++	SandboxServiceAccount string
++	SandboxImage          string
++	Namespace             string
++	KubeconfigPath        string // empty = in-cluster
++	MemoryRequest         string
++	MemoryLimit           string
++	CPURequest            string
++	CPULimit              string
+ 	// Code* size the optional code-execution sidecar container SEPARATELY from the
+ 	// main sandbox container. With execd's idle scale-to-zero (lazy jupyter), an
+ 	// IDLE code-sidecar is ~execd-only (~35MiB), so its REQUEST (reserved capacity)
+@@ -663,7 +666,11 @@ func (p *Provider) AdoptByID(ctx context.Context, rec state.SandboxRecord) (prov
+ 	// per-tenant namespaces, not cfg.Namespace) are still found. The sandbox-id
+ 	// label is unique per Pod, so a cluster-wide match is unambiguous.
+ 	selector := labelManagedBy + "=scitrera-sandbox," + labelSandboxID + "=" + rec.SandboxID
+-	pods, err := p.client.CoreV1().Pods(metav1.NamespaceAll).List(ctx, metav1.ListOptions{LabelSelector: selector})
++	namespace := metav1.NamespaceAll
++	if p.cfg.SingleNamespace {
++		namespace = p.cfg.Namespace
++	}
++	pods, err := p.client.CoreV1().Pods(namespace).List(ctx, metav1.ListOptions{LabelSelector: selector})
+ 	if err != nil {
+ 		return nil, false, fmt.Errorf("adopt by id: list pods: %w", err)
+ 	}
+@@ -1126,6 +1133,14 @@ func (p *Provider) bumpFor(sandboxID string) func() {
+ // For the provider's own default namespace (cfg.Namespace, "sandboxes") the
+ // historical create-if-missing behaviour is preserved (single-tenant path).
+ func (p *Provider) ensureNamespace(ctx context.Context, namespace string) error {
++	if p.cfg.SingleNamespace {
++		if namespace != p.cfg.Namespace {
++			return fmt.Errorf("namespace %s is outside configured namespace %s", namespace, p.cfg.Namespace)
++		}
++		// Namespace creation belongs to the installer; namespaced operations
++		// surface a missing namespace without cluster-level read authority.
++		return nil
++	}
+ 	_, err := p.client.CoreV1().Namespaces().Get(ctx, namespace, metav1.GetOptions{})
+ 	if err == nil {
+ 		return nil
+@@ -1807,6 +1822,8 @@ func (p *Provider) buildPodSpec(in podSpecInput) *corev1.Pod {
+ 	}
+ 
+ 	podSpec := corev1.PodSpec{
++		AutomountServiceAccountToken: boolPtr(false),
++		ServiceAccountName:           p.cfg.SandboxServiceAccount,
+ 		// RestartPolicyAlways (was RestartPolicyNever under the Job model).
+ 		// WHY: the sandbox runs a long-lived execd server that never exits on
+ 		// its own, so Always gives crash-restart resilience AND is required for
+diff --git b/sandbox-provider/internal/provider/k8s/single_namespace_test.go b/sandbox-provider/internal/provider/k8s/single_namespace_test.go
+new file mode 100644
+index 0000000..c49337f
+--- /dev/null
++++ b/sandbox-provider/internal/provider/k8s/single_namespace_test.go
+@@ -0,0 +1,30 @@
++package k8s
++
++import (
++	"context"
++	"github.com/scitrera/platform-backend/sandbox-provider/internal/state"
++	"k8s.io/client-go/kubernetes/fake"
++	"testing"
++)
++
++func TestSingleNamespaceDiscoveryRequiresNoClusterList(t *testing.T) {
++	client := fake.NewSimpleClientset()
++	p := &Provider{cfg: ProviderConfig{Namespace: "tenant-alpha", SingleNamespace: true}, client: client}
++	_, live, err := p.AdoptByID(context.Background(), state.SandboxRecord{SandboxID: "missing"})
++	if err != nil || live {
++		t.Fatalf("adopt = %v, %v", live, err)
++	}
++	actions := client.Actions()
++	if len(actions) != 1 || actions[0].GetNamespace() != "tenant-alpha" {
++		t.Fatalf("API actions: %#v", actions)
++	}
++	if err := p.ensureNamespace(context.Background(), "tenant-beta"); err == nil {
++		t.Fatal("accepted foreign namespace")
++	}
++	if err := p.ensureNamespace(context.Background(), "tenant-alpha"); err != nil {
++		t.Fatal(err)
++	}
++	if len(client.Actions()) != 1 {
++		t.Fatal("issued cluster namespace request")
++	}
++}
+diff --git a/sandbox-provider/internal/provider/sidecar/env.go b/sandbox-provider/internal/provider/sidecar/env.go
+index 52cde03..4e25ae1 100644
+--- a/sandbox-provider/internal/provider/sidecar/env.go
++++ b/sandbox-provider/internal/provider/sidecar/env.go
+@@ -65,6 +65,11 @@ func BuildEnv(cfg SandboxSidecarConfig, id *SidecarIdentity) map[string]string {
+ 		"AETHER_TLS_CLIENT_KEY",
+ 	} {
+ 		val := strings.TrimSpace(os.Getenv(varName))
++		// Delegated agent tokens require an anonymous transport certificate;
++		// the provider service certificate must not assert a conflicting identity.
++		if override := strings.TrimSpace(os.Getenv("SANDBOX_SIDECAR_" + strings.TrimPrefix(varName, "AETHER_"))); override != "" {
++			val = override
++		}
+ 		if val == "" {
+ 			continue
+ 		}
+diff --git a/sandbox-provider/internal/provider/sidecar/env_test.go b/sandbox-provider/internal/provider/sidecar/env_test.go
+index 39a0698..8fdaf66 100644
+--- a/sandbox-provider/internal/provider/sidecar/env_test.go
++++ b/sandbox-provider/internal/provider/sidecar/env_test.go
+@@ -132,3 +132,14 @@ func TestBuildEnv_AllowedTargets_AlwaysIncludesProviderTopic(t *testing.T) {
+ 		}
+ 	})
+ }
++
++func TestBuildEnv_DelegatedTransportDoesNotInheritProviderIdentity(t *testing.T) {
++	t.Setenv("AETHER_TLS_CLIENT_CERT", "-----provider-certificate-----")
++	t.Setenv("AETHER_TLS_CLIENT_KEY", "-----provider-key-----")
++	t.Setenv("SANDBOX_SIDECAR_TLS_CLIENT_CERT", "-----anonymous-certificate-----")
++	t.Setenv("SANDBOX_SIDECAR_TLS_CLIENT_KEY", "-----anonymous-key-----")
++	env := BuildEnv(SandboxSidecarConfig{}, nil)
++	if env["AETHER_TLS_CLIENT_CERT"] != "-----anonymous-certificate-----" || env["AETHER_TLS_CLIENT_KEY"] != "-----anonymous-key-----" {
++		t.Fatal("delegated transport inherited service identity")
++	}
++}
+diff --git a/scripts/build_images.py b/scripts/build_images.py
+index bbae135..2f3d722 100755
+--- a/scripts/build_images.py
++++ b/scripts/build_images.py
+@@ -17,8 +17,9 @@ IMAGES={
+  'sahara-code-sidecar':'sandbox/sandboxes/sahara-code-sidecar/Dockerfile',
+  'code-interpreter':'sandbox/sandboxes/code-interpreter/Dockerfile'}
+ def main():
+- parser=argparse.ArgumentParser(description=__doc__);parser.add_argument('images',nargs='+',choices=['all',*IMAGES]);args=parser.parse_args()
++ parser=argparse.ArgumentParser(description=__doc__);parser.add_argument('images',nargs='+',choices=['all',*IMAGES]);parser.add_argument('--aether-image',default=os.environ.get('AETHER_IMAGE'),help='Pinned Aether image containing proxy-sidecar; required for sidecar2');args=parser.parse_args()
+  names=list(IMAGES) if 'all' in args.images else args.images
++ if 'sidecar2' in names and not args.aether_image:parser.error('--aether-image is required when building sidecar2')
+  if (ROOT/'.git').exists():
+   revision=subprocess.check_output(['git','rev-parse','HEAD'],cwd=ROOT,text=True).strip()
+   if subprocess.check_output(['git','status','--porcelain'],cwd=ROOT,text=True).strip():revision+='-dirty'
+@@ -26,7 +27,8 @@ def main():
+  revision=os.environ.get('SOURCE_REVISION',revision)
+  for name in names:
+   tag='platform-backend/'+name+(':dev' if name.endswith('-base') else ':review')
+-  subprocess.run(['docker','build','-f',str(ROOT/IMAGES[name]),'-t',tag,
++  dependency_args=['--build-arg','AETHER_IMAGE='+args.aether_image] if name=='sidecar2' else []
++  subprocess.run(['docker','build',*dependency_args,'-f',str(ROOT/IMAGES[name]),'-t',tag,
+    '--build-arg','SOURCE_REVISION='+revision,'--build-arg','SCITRERA_GIT_COMMIT='+revision,
+    '--build-arg','SCITRERA_VERSION=0.1.0','--build-arg','GIT_COMMIT='+revision,'--build-arg','VERSION=0.1.0',str(ROOT)],check=True)
+   print('Built',tag,flush=True)
+diff --git a/tools-wss/internal/config/config.go b/tools-wss/internal/config/config.go
+index 0a40961..3a83389 100644
+--- a/tools-wss/internal/config/config.go
++++ b/tools-wss/internal/config/config.go
+@@ -7,6 +7,7 @@ import (
+ 	"strconv"
+ 	"strings"
+ 
++	aether "github.com/scitrera/aether/sdk/go/aether"
+ 	"github.com/scitrera/platform-backend/tools-wss/internal/hostaccess"
+ )
+ 
+@@ -18,6 +19,9 @@ type Config struct {
+ 	// URL of the Aether auth-proxy in verify mode.
+ 	AuthProxyURL string
+ 
++	// Optional exact workspace for token verification and delegated authority.
++	AuthWorkspace string
++
+ 	// Comma-separated list of allowed CORS origins.
+ 	// Empty means same-origin only (no CORS header injected).
+ 	AllowedOrigins []string
+@@ -32,6 +36,9 @@ type Config struct {
+ 	// Aether API token for tools-wss's ServiceIdentity.
+ 	AetherServiceToken string
+ 
++	AetherServiceTLS *aether.TLSConfig
++	AetherUserTLS    *aether.TLSConfig
++
+ 	// Log level: trace, debug, info, warn, error.
+ 	LogLevel string
+ 
+@@ -108,6 +115,7 @@ func Load() (*Config, error) {
+ 	}
+ 	cfg := &Config{
+ 		ListenAddr:                  envOrDefault("TOOLS_WSS_LISTEN_ADDR", ":8090"),
++		AuthWorkspace:               os.Getenv("TOOLS_WSS_AUTH_WORKSPACE"),
+ 		AuthProxyURL:                envOrDefault("TOOLS_WSS_AUTH_PROXY_URL", "http://localhost:8080"),
+ 		AetherGateway:               envOrDefault("AETHER_GATEWAY", "localhost:50051"),
+ 		AetherServiceImplementation: envOrDefault("AETHER_SERVICE_IMPLEMENTATION", "tools-wss"),
+@@ -126,6 +134,11 @@ func Load() (*Config, error) {
+ 		DataConnectorsTarget:        envOrDefault("DC_AETHER_TARGET", "sv::data-connectors"),
+ 	}
+ 
++	cfg.AetherServiceTLS, cfg.AetherUserTLS, err = loadAetherTLS()
++	if err != nil {
++		return nil, err
++	}
++
+ 	// Parse allowed origins.
+ 	raw := os.Getenv("TOOLS_WSS_ALLOWED_ORIGINS")
+ 	if raw != "" {
+@@ -145,6 +158,12 @@ func Load() (*Config, error) {
+ }
+ 
+ func (c *Config) validate() error {
++	if strings.ContainsAny(c.AuthWorkspace, "*?[]") {
++		return fmt.Errorf("TOOLS_WSS_AUTH_WORKSPACE must be an exact workspace")
++	}
++	if c.AuthWorkspace != "" && c.AuthWorkspace != c.RegistryWorkspace {
++		return fmt.Errorf("TOOLS_WSS_AUTH_WORKSPACE must match the registry workspace")
++	}
+ 	if c.AetherGateway == "" {
+ 		return fmt.Errorf("AETHER_GATEWAY is required")
+ 	}
+diff --git b/tools-wss/internal/config/tls.go b/tools-wss/internal/config/tls.go
+new file mode 100644
+index 0000000..8fa85f7
+--- /dev/null
++++ b/tools-wss/internal/config/tls.go
+@@ -0,0 +1,63 @@
++package config
++
++import (
++	"fmt"
++	aether "github.com/scitrera/aether/sdk/go/aether"
++	"os"
++	"strconv"
++)
++
++// loadAetherTLS keeps the named service and anonymous user certificates separate.
++func loadAetherTLS() (*aether.TLSConfig, *aether.TLSConfig, error) {
++	raw := os.Getenv("AETHER_TLS_ENABLED")
++	if raw == "" {
++		raw = "false"
++	}
++	enabled, err := strconv.ParseBool(raw)
++	if err != nil {
++		return nil, nil, fmt.Errorf("AETHER_TLS_ENABLED must be a boolean")
++	}
++	if !enabled {
++		return nil, nil, nil
++	}
++	read := func(name string) ([]byte, error) {
++		path := os.Getenv(name)
++		if path == "" {
++			return nil, fmt.Errorf("%s is required with Aether TLS", name)
++		}
++		value, err := os.ReadFile(path)
++		if err != nil {
++			return nil, fmt.Errorf("read %s: %w", name, err)
++		}
++		return value, nil
++	}
++	roots, err := read("AETHER_TLS_CA_CERT")
++	if err != nil {
++		return nil, nil, err
++	}
++	leaf := func(certName, keyName string) (*aether.TLSConfig, error) {
++		cert, err := read(certName)
++		if err != nil {
++			return nil, err
++		}
++		key, err := read(keyName)
++		if err != nil {
++			return nil, err
++		}
++		cfg := &aether.TLSConfig{Enabled: true, RootCAs: roots, ClientCert: cert, ClientKey: key,
++			ServerName: os.Getenv("AETHER_TLS_SERVER_NAME")}
++		if _, err := cfg.ToTLSConfig(); err != nil {
++			return nil, fmt.Errorf("invalid %s configuration: %w", certName, err)
++		}
++		return cfg, nil
++	}
++	service, err := leaf("AETHER_TLS_CLIENT_CERT", "AETHER_TLS_CLIENT_KEY")
++	if err != nil {
++		return nil, nil, err
++	}
++	user, err := leaf("AETHER_USER_TLS_CLIENT_CERT", "AETHER_USER_TLS_CLIENT_KEY")
++	if err != nil {
++		return nil, nil, err
++	}
++	return service, user, nil
++}
+diff --git b/tools-wss/internal/config/tls_test.go b/tools-wss/internal/config/tls_test.go
+new file mode 100644
+index 0000000..292193f
+--- /dev/null
++++ b/tools-wss/internal/config/tls_test.go
+@@ -0,0 +1,82 @@
++package config
++
++import (
++	"crypto/ed25519"
++	"crypto/rand"
++	"crypto/x509"
++	"crypto/x509/pkix"
++	"encoding/pem"
++	"math/big"
++	"os"
++	"path/filepath"
++	"testing"
++	"time"
++)
++
++func TestAetherTLSLoadsDistinctServiceAndAnonymousUserCredentials(t *testing.T) {
++	dir := t.TempDir()
++	public, key, err := ed25519.GenerateKey(rand.Reader)
++	if err != nil {
++		t.Fatal(err)
++	}
++	ca := &x509.Certificate{SerialNumber: big.NewInt(1), Subject: pkix.Name{CommonName: "fixture CA"},
++		NotBefore: time.Now().Add(-time.Minute), NotAfter: time.Now().Add(time.Hour),
++		IsCA: true, BasicConstraintsValid: true, KeyUsage: x509.KeyUsageCertSign}
++	der, err := x509.CreateCertificate(rand.Reader, ca, ca, public, key)
++	if err != nil {
++		t.Fatal(err)
++	}
++	caPath := filepath.Join(dir, "ca.crt")
++	if err := os.WriteFile(caPath, pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: der}), 0600); err != nil {
++		t.Fatal(err)
++	}
++	t.Setenv("AETHER_TLS_ENABLED", "true")
++	t.Setenv("AETHER_TLS_CA_CERT", caPath)
++	for i, role := range []string{"service", "user"} {
++		cn := "sv::tools-wss-client::fixture"
++		prefix := "AETHER_TLS_CLIENT_"
++		if role == "user" {
++			cn = "_anonymous"
++			prefix = "AETHER_USER_TLS_CLIENT_"
++		}
++		pub, priv, err := ed25519.GenerateKey(rand.Reader)
++		if err != nil {
++			t.Fatal(err)
++		}
++		leaf := &x509.Certificate{SerialNumber: big.NewInt(int64(i + 2)), Subject: pkix.Name{CommonName: cn},
++			NotBefore: ca.NotBefore, NotAfter: ca.NotAfter, KeyUsage: x509.KeyUsageDigitalSignature,
++			ExtKeyUsage: []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth}}
++		cert, err := x509.CreateCertificate(rand.Reader, leaf, ca, pub, key)
++		if err != nil {
++			t.Fatal(err)
++		}
++		pkcs, err := x509.MarshalPKCS8PrivateKey(priv)
++		if err != nil {
++			t.Fatal(err)
++		}
++		certPath, keyPath := filepath.Join(dir, role+".crt"), filepath.Join(dir, role+".key")
++		if err := os.WriteFile(certPath, pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: cert}), 0600); err != nil {
++			t.Fatal(err)
++		}
++		if err := os.WriteFile(keyPath, pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: pkcs}), 0600); err != nil {
++			t.Fatal(err)
++		}
++		t.Setenv(prefix+"CERT", certPath)
++		t.Setenv(prefix+"KEY", keyPath)
++	}
++	service, user, err := loadAetherTLS()
++	if err != nil {
++		t.Fatal(err)
++	}
++	if !service.Enabled || !user.Enabled || string(service.ClientCert) == string(user.ClientCert) {
++		t.Fatal("service and user TLS identities were not distinct")
++	}
++	t.Setenv("AETHER_USER_TLS_CLIENT_KEY", "")
++	if _, _, err := loadAetherTLS(); err == nil {
++		t.Fatal("missing user key accepted")
++	}
++	t.Setenv("AETHER_TLS_ENABLED", "maybe")
++	if _, _, err := loadAetherTLS(); err == nil {
++		t.Fatal("invalid TLS switch accepted")
++	}
++}
+diff --git a/tools-wss/internal/server/auth.go b/tools-wss/internal/server/auth.go
+index 389781b..eea4cf8 100644
+--- a/tools-wss/internal/server/auth.go
++++ b/tools-wss/internal/server/auth.go
+@@ -61,12 +61,20 @@ func aetherCredentialsFromRequest(headers http.Header, query url.Values) aether.
+ // WebSocket upgrade request, so as a fallback we accept the bearer token via
+ // the ?access_token= query parameter and synthesize the Authorization header
+ // for the upstream verify call. This mirrors RFC 6750 §2.3.
+-func verifyAuth(ctx context.Context, authProxyURL string, headers http.Header, query url.Values) (*Identity, error) {
++func verifyAuth(ctx context.Context, authProxyURL string, headers http.Header, query url.Values, workspace string) (*Identity, error) {
+ 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, authProxyURL+"/auth/verify", nil)
+ 	if err != nil {
+ 		return nil, fmt.Errorf("building auth verify request: %w", err)
+ 	}
+ 
++	// Use only operator configuration for this boundary. Browser query/header
++	// workspace values cannot widen the verified or delegated workspace.
++	if workspace != "" {
++		values := req.URL.Query()
++		values.Set("workspace_id", workspace)
++		req.URL.RawQuery = values.Encode()
++	}
++
+ 	// Forward the Authorization header so the auth-proxy can validate it.
+ 	auth := headers.Get("Authorization")
+ 	if auth == "" {
+diff --git a/tools-wss/internal/server/auth_test.go b/tools-wss/internal/server/auth_test.go
+index 4a5c8ce..78ec93a 100644
+--- a/tools-wss/internal/server/auth_test.go
++++ b/tools-wss/internal/server/auth_test.go
+@@ -202,3 +202,23 @@ func TestAetherCredentialsFromRequest(t *testing.T) {
+ 		}
+ 	})
+ }
++
++func TestVerifyAuthUsesConfiguredWorkspace(t *testing.T) {
++	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
++		if got := r.URL.Query().Get("workspace_id"); got != "review&ops" {
++			t.Errorf("workspace: got %q", got)
++		}
++		if got := r.Header.Get("X-Workspace-ID"); got != "" {
++			t.Errorf("untrusted workspace header forwarded: %q", got)
++		}
++		w.Header().Set("X-Auth-User-ID", "fixture@example.test")
++		w.WriteHeader(http.StatusOK)
++	}))
++	defer srv.Close()
++	headers := http.Header{"X-Workspace-Id": []string{"forged"}, "X-Api-Key": []string{"fixture"}}
++	_, err := server.ExportedVerifyAuthWorkspace(context.Background(), srv.URL, headers,
++		url.Values{"workspace_id": []string{"forged"}}, "review&ops")
++	if err != nil {
++		t.Fatal(err)
++	}
++}
+diff --git a/tools-wss/internal/server/connection.go b/tools-wss/internal/server/connection.go
+index 1be6aef..02e22e4 100644
+--- a/tools-wss/internal/server/connection.go
++++ b/tools-wss/internal/server/connection.go
+@@ -121,6 +121,7 @@ type ClientConnection struct {
+ 	// Aether client for this connection (ServiceIdentity per-client).
+ 	aetherClient     *aether.ServiceClient
+ 	aetherUserClient *aether.UserClient
++	authWorkspace    string
+ 	authorityMu      sync.RWMutex
+ 	authority        *edgeAuthority
+ 	authorityReady   chan struct{}
+@@ -525,9 +526,13 @@ func (c *ClientConnection) exchangeEdgeAuthority(ctx context.Context) error {
+ 	if sessionID == "" {
+ 		return fmt.Errorf("Aether user session has no session ID")
+ 	}
++	workspaces := []string{"_subject_workspaces"}
++	if c.authWorkspace != "" {
++		workspaces = []string{c.authWorkspace}
++	}
+ 	now := time.Now()
+ 	resp, err := c.aetherClient.AuthorityGrants().Exchange(ctx, sessionID, aether.ExchangeOpts{
+-		WorkspaceScope:           []string{"_subject_workspaces"},
++		WorkspaceScope:           workspaces,
+ 		MaxAccessLevel:           40,
+ 		AudienceType:             "session",
+ 		AudienceID:               sessionID,
+diff --git a/tools-wss/internal/server/export_test.go b/tools-wss/internal/server/export_test.go
+index 0056fa8..bb82b1c 100644
+--- a/tools-wss/internal/server/export_test.go
++++ b/tools-wss/internal/server/export_test.go
+@@ -12,9 +12,13 @@ import (
+ 
+ // ExportedVerifyAuth exposes verifyAuth for testing.
+ func ExportedVerifyAuth(ctx context.Context, authProxyURL string, headers http.Header, query url.Values) (*Identity, error) {
+-	return verifyAuth(ctx, authProxyURL, headers, query)
++	return verifyAuth(ctx, authProxyURL, headers, query, "")
+ }
+ 
+ func ExportedAetherCredentialsFromRequest(headers http.Header, query url.Values) aether.Credentials {
+ 	return aetherCredentialsFromRequest(headers, query)
+ }
++
++func ExportedVerifyAuthWorkspace(ctx context.Context, authProxyURL string, headers http.Header, query url.Values, workspace string) (*Identity, error) {
++	return verifyAuth(ctx, authProxyURL, headers, query, workspace)
++}
+diff --git a/tools-wss/internal/server/router.go b/tools-wss/internal/server/router.go
+index be34cef..67b4e02 100644
+--- a/tools-wss/internal/server/router.go
++++ b/tools-wss/internal/server/router.go
+@@ -293,8 +293,14 @@ func sendBridgeRPC(
+ 	argVal interface{},
+ 	timeout time.Duration,
+ ) (map[string]interface{}, error) {
++	workspace := registrationWorkspace(conn)
++	if args, ok := argVal.(map[string]interface{}); ok {
++		if selected, ok := args["workspace"].(string); ok && selected != "" {
++			workspace = selected
++		}
++	}
+ 	return sendBridgeRPCChecked(
+-		conn, reqID, registrationWorkspace(conn), argKey, argVal, nil, timeout,
++		conn, reqID, workspace, argKey, argVal, nil, timeout,
+ 	)
+ }
+ 
+@@ -307,9 +313,21 @@ func sendBridgeRPCChecked(
+ 	checkedAccess *pb.ResourceAccessRequest,
+ 	timeout time.Duration,
+ ) (map[string]interface{}, error) {
++	if conn.authWorkspace != "" && workspace != conn.authWorkspace {
++		return nil, fmt.Errorf("workspace is outside this connection's configured authority")
++	}
+ 	if conn.aetherClient == nil {
+ 		return nil, fmt.Errorf("no Aether client for this connection")
+ 	}
++	// Legacy read RPCs must check their actual workspace before delivery.
++	// An envelope's routing workspace alone is not an authorization request.
++	if checkedAccess == nil && workspace != "" {
++		checkedAccess = &pb.ResourceAccessRequest{
++			ResourceType: workspaceResourceType, ResourceId: workspace,
++			Operation: argKey, Workspace: workspace,
++			RequiredAccessLevel: readAccessLevel, CorrelationId: reqID,
++		}
++	}
+ 
+ 	topic := platformBridgeTopic(conn)
+ 	authorization, err := conn.waitEdgeAuthority(aetherReadyTimeout)
+diff --git a/tools-wss/internal/server/router_chat_cancel_test.go b/tools-wss/internal/server/router_chat_cancel_test.go
+index db556f3..46d5e8e 100644
+--- a/tools-wss/internal/server/router_chat_cancel_test.go
++++ b/tools-wss/internal/server/router_chat_cancel_test.go
+@@ -2,7 +2,9 @@ package server
+ 
+ import (
+ 	"encoding/json"
++	"strings"
+ 	"testing"
++	"time"
+ 
+ 	"github.com/scitrera/platform-backend/tools-wss/internal/protocol"
+ )
+@@ -35,3 +37,11 @@ func TestChatCancelRejectsTaskNotIssuedToConnection(t *testing.T) {
+ 		t.Fatalf("response = %+v, want invalid params", response)
+ 	}
+ }
++
++func TestBridgeRPCRejectsSelectedWorkspaceBeforeDispatch(t *testing.T) {
++	conn := &ClientConnection{authWorkspace: "default", registryWorkspace: "default"}
++	_, err := sendBridgeRPC(conn, "fixture", "chat.list_threads", map[string]interface{}{"workspace": "other"}, time.Second)
++	if err == nil || !strings.Contains(err.Error(), "configured authority") {
++		t.Fatalf("expected workspace rejection before client use, got %v", err)
++	}
++}
+diff --git a/tools-wss/internal/server/server.go b/tools-wss/internal/server/server.go
+index 41351aa..fd874c1 100644
+--- a/tools-wss/internal/server/server.go
++++ b/tools-wss/internal/server/server.go
+@@ -110,7 +110,7 @@ func (s *Server) handleConnect(w http.ResponseWriter, r *http.Request) {
+ 	// 1. Auth verify — must happen before upgrade.
+ 	// Browser WebSocket clients can't set custom headers; verifyAuth also
+ 	// accepts the bearer token via ?access_token= query param as fallback.
+-	identity, err := verifyAuth(ctx, s.cfg.AuthProxyURL, r.Header, r.URL.Query())
++	identity, err := verifyAuth(ctx, s.cfg.AuthProxyURL, r.Header, r.URL.Query(), s.cfg.AuthWorkspace)
+ 	if err != nil {
+ 		authErr, ok := err.(*AuthError)
+ 		if ok {
+@@ -199,6 +199,8 @@ func (s *Server) handleConnect(w http.ResponseWriter, r *http.Request) {
+ 		s.cfg.DataConnectorsTarget,
+ 	)
+ 
++	conn.authWorkspace = s.cfg.AuthWorkspace
++
+ 	if err := s.registry.Register(conn); err != nil {
+ 		log.Warn().Err(err).Msg("connection rejected by registry")
+ 		_ = wsConn.WriteMessage(websocket.CloseMessage,
+@@ -246,6 +248,7 @@ func (s *Server) newAetherServiceClient(connID string, identity *Identity) (*aet
+ 	opts := aether.ServiceOptions{
+ 		ClientOptions: aether.ClientOptions{
+ 			ServerAddr:  s.cfg.AetherGateway,
++			TLS:         s.cfg.AetherServiceTLS,
+ 			Credentials: creds,
+ 			Connection: aether.ConnectionOptions{
+ 				MaxRetries:     3,
+@@ -274,6 +277,7 @@ func (s *Server) newAetherUserClient(
+ 	return aether.NewUserClient(aether.UserOptions{
+ 		ClientOptions: aether.ClientOptions{
+ 			ServerAddr:  s.cfg.AetherGateway,
++			TLS:         s.cfg.AetherUserTLS,
+ 			Credentials: credentials,
+ 			Connection: aether.ConnectionOptions{
+ 				MaxRetries:     3,

@@ -1,0 +1,38 @@
+phase: 0
+development: false
+bootstrapRevision: '1'
+databaseInstances: 1
+storage:
+  className: ''
+  size: 10Gi
+resources:
+  requests:
+    cpu: 100m
+    memory: 128Mi
+  limits:
+    cpu: '2'
+    memory: 1Gi
+tenantNamespaces: []
+images:
+  postgres: ''
+  edge: ''
+  blobgw: ''
+  web: ''
+secrets:
+  database: storage-db
+  storage: storage-env
+  files: storage-files
+sharedNamespace: platform-shared
+databaseResources:
+  requests:
+    cpu: 100m
+    memory: 256Mi
+  limits:
+    cpu: '2'
+    memory: 1Gi
+roleResources: {}
+
+uploadProxy:
+  enabled: false
+  endpoint: ""
+  signedHost: ""

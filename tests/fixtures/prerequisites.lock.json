@@ -1,0 +1,34 @@
+{
+  "tested_tools": {
+    "kind": "0.30.0",
+    "kubernetes": "1.34.0",
+    "calico": "3.32.2",
+    "cnpg": "1.29.1",
+    "envoyGateway": "1.9.1"
+  },
+  "artifacts": {
+    "calico.yaml": {
+      "url": "https://raw.githubusercontent.com/projectcalico/calico/v3.32.2/manifests/calico.yaml",
+      "sha256": "a8c828a06a87c629a282ebbc424895b77f3a030251993e41ea400a743675bb02"
+    },
+    "cnpg.yaml": {
+      "url": "https://github.com/cloudnative-pg/cloudnative-pg/releases/download/v1.29.1/cnpg-1.29.1.yaml",
+      "sha256": "e0c5ff41bf5b01c0775bf225929b8423d543cd23e9742e4274fe7de8499cf93a"
+    },
+    "gateway-helm-v1.9.1.tgz": {
+      "sha256": "68ce74961eeb5fc5e395628d6bbed9305a85b34619bd7ee17b01187f101bb8c5",
+      "oci": "oci://docker.io/envoyproxy/gateway-helm",
+      "version": "v1.9.1"
+    }
+  },
+  "images": {
+    "kind": "kindest/node:v1.34.0@sha256:7416a61b42b1662ca6ca89f02028ac133a309a2a30ba309614e8ec94d976dc5a",
+    "postgres": "ghcr.io/cloudnative-pg/postgresql:17.9-system-trixie@sha256:8fd8db26090e602458269741849e5c9cd7aff577a22af53c8a402c580fd1e729",
+    "minio": "quay.io/minio/minio@sha256:14cea493d9a34af32f524e538b8346cf79f3321eff8e708c1e2960462bd8936e",
+    "mc": "quay.io/minio/mc@sha256:a7fe349ef4bd8521fb8497f55c6042871b2ae640607cf99d9bede5e9bdf11727"
+  },
+  "localAliases": {
+    "minio": "platform-integration/minio:14cea493d9a34af3",
+    "mc": "platform-integration/mc:a7fe349ef4bd8521"
+  }
+}

@@ -1,0 +1,14 @@
+[
+  {
+    "slug": "alpha",
+    "name": "Alpha example",
+    "email": "alice@example.test",
+    "workspace": "default"
+  },
+  {
+    "slug": "beta",
+    "name": "Beta example",
+    "email": "bob@example.test",
+    "workspace": "default"
+  }
+]

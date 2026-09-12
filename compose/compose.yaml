@@ -1,0 +1,1706 @@
+name: ${COMPOSE_PROJECT_NAME:-platform-integration}
+services:
+  mt-postgres:
+    image: postgres:17.11-alpine@sha256:18cfe3ef5e6815560c98237d6216d1e5119702fb0f3894c8785dd58b8bbe5d73
+    environment:
+      POSTGRES_DB: auth
+      POSTGRES_USER: auth
+      POSTGRES_PASSWORD: ${MT_PASSWORD:?Run configure.py}
+    volumes:
+    - mt-data:/var/lib/postgresql/data
+    networks:
+    - identity
+    healthcheck:
+      test:
+      - CMD-SHELL
+      - pg_isready -U auth -d auth
+      interval: 3s
+      timeout: 3s
+      retries: 40
+      start_period: 5s
+  sessions:
+    image: valkey/valkey:8-alpine@sha256:d2e18f3410b6f616de1417f570fa55261af2898b9c5b2cfb6781ce2373ea43d1
+    command:
+    - valkey-server
+    - --appendonly
+    - 'yes'
+    - --appendfsync
+    - always
+    - --maxmemory-policy
+    - noeviction
+    volumes:
+    - sessions:/data
+    networks:
+    - identity
+    healthcheck:
+      test:
+      - CMD-SHELL
+      - valkey-cli ping
+      interval: 3s
+      timeout: 3s
+      retries: 40
+      start_period: 5s
+  auth-migrate:
+    image: ${AUTH_IMAGE:?Run build.py}
+    command:
+    - migrate
+    networks:
+    - identity
+    environment:
+      SCITRERA_MT_DB_URL: postgres://auth:${MT_PASSWORD}@mt-postgres:5432/auth?sslmode=disable
+    depends_on:
+      mt-postgres:
+        condition: service_healthy
+    restart: 'no'
+    labels:
+      platform.scitrera.io/lifecycle: job
+  auth:
+    image: ${AUTH_IMAGE:?Run build.py}
+    user: ${LOCAL_UID}:${LOCAL_GID}
+    networks:
+    - identity
+    - gateway
+    ports:
+    - 127.0.0.1:${AUTH_ADMIN_PORT:-18082}:8082
+    volumes:
+    - ../.local/operators.json:/run/auth/operators.json:ro
+    env_file:
+    - path: ../.local/oauth.env
+      required: false
+    environment:
+      SCITRERA_MT_DB_URL: postgres://auth:${MT_PASSWORD}@mt-postgres:5432/auth?sslmode=disable
+      AUTH_PROXY_MODE: verify
+      AUTH_PROXY_LISTEN_ADDR: :8080
+      AUTH_PROXY_TOKEN_HMAC_KEY: ${AUTH_HMAC}
+      AUTH_PROXY_REDIS_ADDR: sessions:6379
+      AUTH_PROXY_SESSION_STORE: redis
+      AUTH_PROXY_SESSION_REDIS_ADDR: sessions:6379
+      SCITRERA_AUTH_EXTERNAL_ADDR: :8081
+      SCITRERA_AUTH_ADMIN_ADDR: :8082
+      SCITRERA_AUTH_ADMIN_ORIGIN: http://127.0.0.1:${AUTH_ADMIN_PORT:-18082}
+      SCITRERA_AUTH_ADMIN_TOKEN_FILE: /run/auth/operators.json
+      SCITRERA_AUTH_POST_LOGIN_TARGET: http://127.0.0.1:${WEB_PORT:-18080}
+      SCITRERA_AUTH_ALLOWED_REDIRECT_HOSTS: 127.0.0.1
+      SCITRERA_AUTH_CHECKZ_ALLOWED_ORIGINS: http://127.0.0.1:${WEB_PORT:-18080}
+      AUTH_PROXY_SESSION_COOKIE_SECURE: 'false'
+    depends_on:
+      auth-migrate:
+        condition: service_completed_successfully
+      sessions:
+        condition: service_healthy
+    read_only: true
+    cap_drop:
+    - ALL
+    security_opt:
+    - no-new-privileges:true
+  web:
+    image: ${WEB_IMAGE:?Run build.py}
+    ports:
+    - 127.0.0.1:${WEB_PORT:-18080}:8080
+    volumes:
+    - ../.local/nginx.conf:/etc/nginx/nginx.conf:ro
+    networks:
+    - gateway
+    - storage-api
+    - storage
+    depends_on:
+      auth:
+        condition: service_started
+      platform-alpha:
+        condition: service_healthy
+      platform-beta:
+        condition: service_healthy
+    healthcheck:
+      test:
+      - CMD-SHELL
+      - wget -q -O /dev/null http://127.0.0.1:8080/healthz
+      interval: 3s
+      timeout: 3s
+      retries: 40
+      start_period: 5s
+  aether-alpha:
+    image: ${AETHER_IMAGE:?Run build.py}
+    entrypoint:
+    - aetherlite
+    command:
+    - -config
+    - /etc/aether/config.yaml
+    - -data-dir
+    - /data
+    environment:
+      AETHER_TENANT_ID: alpha
+      AETHER_TOKEN_HMAC_KEY: ${AETHER_HMAC_ALPHA}
+      AETHER_ADMIN_API_KEY: ${AETHER_ADMIN_ALPHA}
+      AETHERLITE_AUTH_VERIFY_LISTEN: :8082
+    volumes:
+    - aether-alpha:/data
+    - ../.local/alpha/aether.yaml:/etc/aether/config.yaml:ro
+    - ../.local/alpha/tls/server:/etc/aether/tls:ro
+    networks:
+      tenant-alpha:
+        aliases:
+        - aether-gateway
+    healthcheck:
+      test:
+      - CMD-SHELL
+      - wget -q -O /dev/null http://127.0.0.1:9090/health/ready
+      interval: 3s
+      timeout: 3s
+      retries: 40
+      start_period: 5s
+    depends_on:
+      aether-init-alpha:
+        condition: service_completed_successfully
+  acl-alpha:
+    image: ${BACKEND_IMAGE:?Run build.py}
+    command:
+    - python
+    - -m
+    - x_acl_seed
+    environment:
+      AETHER_GATEWAY: aether-alpha:50051
+      AETHER_AUTH: none
+      AETHER_TLS_ENABLED: 'true'
+      AETHER_TLS_CA_CERT: /run/tls/ca.crt
+      AETHER_TLS_CLIENT_CERT: /run/tls/tls.crt
+      AETHER_TLS_CLIENT_KEY: /run/tls/tls.key
+      SCITRERA_TENANT: alpha
+      LOGGING_LEVEL: INFO
+      TENANT_ID: alpha
+      ACL_SEED_PHASE: acl
+      MINT_ORCH_IMPL: default
+      MINT_ORCH_SPEC: bootstrap
+      ACL_TRUSTED_SERVICE_IMPLEMENTATIONS: platform-server,platform-bridge,memorylayer,data-connectors,tool-catalog,sandbox-provider,scitrera-management-plane
+      ACL_READ_ONLY_KV_SERVICES: '{"sparkroute-modelcatalog": ["sparkroute/modelcatalog/v1/models/*"]}'
+    volumes:
+    - ../.local/alpha/tls/orchestrator:/run/tls:ro
+    networks:
+    - tenant-alpha
+    depends_on:
+      aether-alpha:
+        condition: service_healthy
+    restart: 'no'
+    labels:
+      platform.scitrera.io/lifecycle: job
+  platform-alpha:
+    image: ${BACKEND_IMAGE:?Run build.py}
+    command:
+    - python
+    - -m
+    - x_ws_server
+    environment:
+      AETHER_GATEWAY: aether-alpha:50051
+      AETHER_AUTH: none
+      AETHER_TLS_ENABLED: 'true'
+      AETHER_TLS_CA_CERT: /run/tls/ca.crt
+      AETHER_TLS_CLIENT_CERT: /run/tls/tls.crt
+      AETHER_TLS_CLIENT_KEY: /run/tls/tls.key
+      SCITRERA_TENANT: alpha
+      LOGGING_LEVEL: INFO
+      AETHER_ANON_TLS_CLIENT_CERT: /run/anonymous/tls.crt
+      AETHER_ANON_TLS_CLIENT_KEY: /run/anonymous/tls.key
+      AETHER_MAX_RECONNECT_ATTEMPTS: '0'
+      WS_ALLOWED_ORIGINS: http://127.0.0.1:${WEB_PORT:-18080}
+      SAHARA_IMAGE: ${SAHARA_IMAGE:?Run build.py}
+      SAHARA_CODE_SIDECAR_IMAGE: ${CODE_IMAGE:?Run build.py}
+      LLM_GATEWAY_AUTH_MODE: bearer
+      LLM_GATEWAY_BASE_URL: http://llm-gateway.mt:8080/v1
+      LLM_GATEWAY_BEARER_TOKEN_FILE: /run/gateway/token
+      SANDBOX_BLOB_FETCH_BASE_URL: http://storage-download:8080
+      SANDBOX_BLOB_UPLOAD_BASE_URL: http://storage-download:8080/uploads
+    volumes:
+    - ../.local/alpha/tls/platform-server:/run/tls:ro
+    - ../.local/alpha/tls/anonymous:/run/anonymous:ro
+    - ../.local/alpha/gateway-token:/run/gateway/token:ro
+    networks:
+    - tenant-alpha
+    - gateway
+    depends_on:
+      catalog-alpha:
+        condition: service_completed_successfully
+    healthcheck:
+      test:
+      - CMD-SHELL
+      - python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/healthz',timeout=2)"
+      interval: 3s
+      timeout: 3s
+      retries: 40
+      start_period: 5s
+  aether-beta:
+    image: ${AETHER_IMAGE:?Run build.py}
+    entrypoint:
+    - aetherlite
+    command:
+    - -config
+    - /etc/aether/config.yaml
+    - -data-dir
+    - /data
+    environment:
+      AETHER_TENANT_ID: beta
+      AETHER_TOKEN_HMAC_KEY: ${AETHER_HMAC_BETA}
+      AETHER_ADMIN_API_KEY: ${AETHER_ADMIN_BETA}
+      AETHERLITE_AUTH_VERIFY_LISTEN: :8082
+    volumes:
+    - aether-beta:/data
+    - ../.local/beta/aether.yaml:/etc/aether/config.yaml:ro
+    - ../.local/beta/tls/server:/etc/aether/tls:ro
+    networks:
+      tenant-beta:
+        aliases:
+        - aether-gateway
+    healthcheck:
+      test:
+      - CMD-SHELL
+      - wget -q -O /dev/null http://127.0.0.1:9090/health/ready
+      interval: 3s
+      timeout: 3s
+      retries: 40
+      start_period: 5s
+    depends_on:
+      aether-init-beta:
+        condition: service_completed_successfully
+  acl-beta:
+    image: ${BACKEND_IMAGE:?Run build.py}
+    command:
+    - python
+    - -m
+    - x_acl_seed
+    environment:
+      AETHER_GATEWAY: aether-beta:50051
+      AETHER_AUTH: none
+      AETHER_TLS_ENABLED: 'true'
+      AETHER_TLS_CA_CERT: /run/tls/ca.crt
+      AETHER_TLS_CLIENT_CERT: /run/tls/tls.crt
+      AETHER_TLS_CLIENT_KEY: /run/tls/tls.key
+      SCITRERA_TENANT: beta
+      LOGGING_LEVEL: INFO
+      TENANT_ID: beta
+      ACL_SEED_PHASE: acl
+      MINT_ORCH_IMPL: default
+      MINT_ORCH_SPEC: bootstrap
+      ACL_TRUSTED_SERVICE_IMPLEMENTATIONS: platform-server,platform-bridge,memorylayer,data-connectors,tool-catalog,sandbox-provider,scitrera-management-plane
+      ACL_READ_ONLY_KV_SERVICES: '{"sparkroute-modelcatalog": ["sparkroute/modelcatalog/v1/models/*"]}'
+    volumes:
+    - ../.local/beta/tls/orchestrator:/run/tls:ro
+    networks:
+    - tenant-beta
+    depends_on:
+      aether-beta:
+        condition: service_healthy
+    restart: 'no'
+    labels:
+      platform.scitrera.io/lifecycle: job
+  platform-beta:
+    image: ${BACKEND_IMAGE:?Run build.py}
+    command:
+    - python
+    - -m
+    - x_ws_server
+    environment:
+      AETHER_GATEWAY: aether-beta:50051
+      AETHER_AUTH: none
+      AETHER_TLS_ENABLED: 'true'
+      AETHER_TLS_CA_CERT: /run/tls/ca.crt
+      AETHER_TLS_CLIENT_CERT: /run/tls/tls.crt
+      AETHER_TLS_CLIENT_KEY: /run/tls/tls.key
+      SCITRERA_TENANT: beta
+      LOGGING_LEVEL: INFO
+      AETHER_ANON_TLS_CLIENT_CERT: /run/anonymous/tls.crt
+      AETHER_ANON_TLS_CLIENT_KEY: /run/anonymous/tls.key
+      AETHER_MAX_RECONNECT_ATTEMPTS: '0'
+      WS_ALLOWED_ORIGINS: http://127.0.0.1:${WEB_PORT:-18080}
+      SAHARA_IMAGE: ${SAHARA_IMAGE:?Run build.py}
+      SAHARA_CODE_SIDECAR_IMAGE: ${CODE_IMAGE:?Run build.py}
+      LLM_GATEWAY_AUTH_MODE: bearer
+      LLM_GATEWAY_BASE_URL: http://llm-gateway.mt:8080/v1
+      LLM_GATEWAY_BEARER_TOKEN_FILE: /run/gateway/token
+      SANDBOX_BLOB_FETCH_BASE_URL: http://storage-download:8080
+      SANDBOX_BLOB_UPLOAD_BASE_URL: http://storage-download:8080/uploads
+    volumes:
+    - ../.local/beta/tls/platform-server:/run/tls:ro
+    - ../.local/beta/tls/anonymous:/run/anonymous:ro
+    - ../.local/beta/gateway-token:/run/gateway/token:ro
+    networks:
+    - tenant-beta
+    - gateway
+    depends_on:
+      catalog-beta:
+        condition: service_completed_successfully
+    healthcheck:
+      test:
+      - CMD-SHELL
+      - python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/healthz',timeout=2)"
+      interval: 3s
+      timeout: 3s
+      retries: 40
+      start_period: 5s
+  aether-init-alpha:
+    image: ${AETHER_IMAGE:?Run build.py}
+    user: 0:0
+    entrypoint:
+    - sh
+    - -c
+    command:
+    - chown 1000:1000 /data
+    volumes:
+    - aether-alpha:/data
+    network_mode: none
+    restart: 'no'
+    cap_drop:
+    - ALL
+    cap_add:
+    - CHOWN
+    labels:
+      platform.scitrera.io/lifecycle: job
+  aether-init-beta:
+    image: ${AETHER_IMAGE:?Run build.py}
+    user: 0:0
+    entrypoint:
+    - sh
+    - -c
+    command:
+    - chown 1000:1000 /data
+    volumes:
+    - aether-beta:/data
+    network_mode: none
+    restart: 'no'
+    cap_drop:
+    - ALL
+    cap_add:
+    - CHOWN
+    labels:
+      platform.scitrera.io/lifecycle: job
+  storage-postgres:
+    image: postgres:17.11-alpine@sha256:18cfe3ef5e6815560c98237d6216d1e5119702fb0f3894c8785dd58b8bbe5d73
+    environment:
+      POSTGRES_DB: storage
+      POSTGRES_USER: storage
+      POSTGRES_PASSWORD: ${STORAGE_PASSWORD}
+    volumes:
+    - storage-postgres:/var/lib/postgresql/data
+    networks:
+    - storage
+    healthcheck:
+      test:
+      - CMD-SHELL
+      - pg_isready -U storage -d storage
+      interval: 3s
+      timeout: 3s
+      retries: 40
+  objects:
+    image: minio/minio@sha256:14cea493d9a34af32f524e538b8346cf79f3321eff8e708c1e2960462bd8936e
+    command:
+    - server
+    - /data
+    environment:
+      MINIO_ROOT_USER: platform-storage
+      MINIO_ROOT_PASSWORD: ${OBJECT_PASSWORD}
+    volumes:
+    - objects:/data
+    networks:
+    - storage
+    healthcheck:
+      test:
+      - CMD
+      - curl
+      - -fsS
+      - http://localhost:9000/minio/health/ready
+      interval: 3s
+      timeout: 3s
+      retries: 40
+  objects-init:
+    image: minio/mc@sha256:a7fe349ef4bd8521fb8497f55c6042871b2ae640607cf99d9bede5e9bdf11727
+    entrypoint:
+    - /bin/sh
+    - -ec
+    command:
+    - 'mc alias set local http://objects:9000 "$$OBJECT_USER" "$$OBJECT_PASSWORD"
+      >/dev/null
+
+      mc mb --ignore-existing local/tenant-alpha local/tenant-beta local/staging'
+    environment:
+      OBJECT_USER: platform-storage
+      OBJECT_PASSWORD: ${OBJECT_PASSWORD}
+    networks:
+    - storage
+    depends_on:
+      objects:
+        condition: service_healthy
+    restart: 'no'
+    labels:
+      platform.scitrera.io/lifecycle: job
+  storage-edge:
+    image: ${EDGE_IMAGE:?Run build.py}
+    user: ${LOCAL_UID}:${LOCAL_GID}
+    command:
+    - -addr
+    - :8090
+    - -backend
+    - s3
+    - -index
+    - postgres
+    - -policy
+    - postgres
+    - -tenant-config
+    - /run/storage/tenants.json
+    - -tenant-secrets-file
+    - /run/storage/credentials.json
+    - -staging
+    - s3
+    - -staging-bucket
+    - staging
+    - -s3-endpoint
+    - http://objects:9000
+    - -s3-force-path-style
+    - -key-seed-hex
+    - ${EDGE_SIGNING_SEED}
+    - -default-require-auth
+    - -gc-interval
+    - '0'
+    environment: &id001
+      BLOBGW_DATABASE_URL: postgres://storage:${STORAGE_PASSWORD}@storage-postgres:5432/storage?sslmode=disable
+      BLOBGW_EDGE_DATABASE_URL: postgres://storage:${STORAGE_PASSWORD}@storage-postgres:5432/storage?sslmode=disable
+      AWS_ACCESS_KEY_ID: platform-storage
+      AWS_SECRET_ACCESS_KEY: ${OBJECT_PASSWORD}
+      AWS_REGION: us-east-1
+    volumes: &id002
+    - ../.local/storage-tenants.json:/run/storage/tenants.json:ro
+    - ../.local/storage-credentials.json:/run/storage/credentials.json:ro
+    networks:
+    - storage
+    - storage-api
+    depends_on: &id003
+      storage-postgres:
+        condition: service_healthy
+      objects-init:
+        condition: service_completed_successfully
+  blobgw:
+    image: ${BLOBGW_IMAGE:?Run build.py}
+    user: ${LOCAL_UID}:${LOCAL_GID}
+    command:
+    - -addr
+    - :8080
+    - -backend
+    - s3
+    - -index
+    - postgres
+    - -tenant-config
+    - /run/storage/tenants.json
+    - -tenant-secrets-file
+    - /run/storage/credentials.json
+    - -staging
+    - s3
+    - -s3-endpoint
+    - http://objects:9000
+    - -s3-bucket
+    - staging
+    - -s3-force-path-style
+    - -gc-interval
+    - '0'
+    environment: *id001
+    volumes: *id002
+    networks:
+    - storage
+    - storage-api
+    depends_on: *id003
+  ml-postgres-alpha:
+    image: ${ML_POSTGRES_IMAGE:?Run build.py}
+    environment:
+      POSTGRES_DB: memorylayer
+      POSTGRES_USER: memorylayer
+      POSTGRES_PASSWORD: ${ML_PASSWORD_ALPHA}
+    volumes:
+    - ml-postgres-alpha:/var/lib/postgresql/data
+    networks:
+    - tenant-alpha
+    healthcheck:
+      test:
+      - CMD-SHELL
+      - pg_isready -U memorylayer -d memorylayer
+      interval: 3s
+      timeout: 3s
+      retries: 40
+  dc-postgres-alpha:
+    image: postgres:17.11-alpine@sha256:18cfe3ef5e6815560c98237d6216d1e5119702fb0f3894c8785dd58b8bbe5d73
+    environment:
+      POSTGRES_DB: dataconnectors
+      POSTGRES_USER: dataconnectors
+      POSTGRES_PASSWORD: ${DC_PASSWORD_ALPHA}
+    volumes:
+    - dc-postgres-alpha:/var/lib/postgresql/data
+    networks:
+    - tenant-alpha
+    healthcheck:
+      test:
+      - CMD-SHELL
+      - pg_isready -U dataconnectors -d dataconnectors
+      interval: 3s
+      timeout: 3s
+      retries: 40
+  ml-migrate-alpha:
+    image: ${MEMORYLAYER_IMAGE:?Run build.py}
+    entrypoint:
+    - python
+    command:
+    - /integration/memorylayer_migrate.py
+    environment:
+      MEMORYLAYER_POSTGRESQL_URL: postgresql://memorylayer:${ML_PASSWORD_ALPHA}@ml-postgres-alpha:5432/memorylayer
+      MEMORYLAYER_AUTO_MIGRATE: '1'
+      MEMORYLAYER_EMBEDDING_DIMENSIONS: '1536'
+    networks:
+    - tenant-alpha
+    depends_on:
+      ml-db-prepare-alpha:
+        condition: service_completed_successfully
+    restart: 'no'
+    volumes:
+    - ../scripts:/integration:ro
+    labels:
+      platform.scitrera.io/lifecycle: job
+  memorylayer-alpha:
+    image: ${MEMORYLAYER_IMAGE:?Run build.py}
+    environment:
+      AETHER_GATEWAY: aether-alpha:50051
+      AETHER_AUTH: none
+      AETHER_TLS_ENABLED: 'true'
+      AETHER_TLS_CA_CERT: /run/tls/ca.crt
+      AETHER_TLS_CLIENT_CERT: /run/tls/tls.crt
+      AETHER_TLS_CLIENT_KEY: /run/tls/tls.key
+      SCITRERA_TENANT: alpha
+      LOGGING_LEVEL: INFO
+      AETHER_MAX_RECONNECT_ATTEMPTS: '0'
+      AETHER_GATEWAY_ADDR: aether-alpha:50051
+      MEMORYLAYER_SERVER_HOST: 0.0.0.0
+      MEMORYLAYER_SERVER_PORT: '8000'
+      MEMORYLAYER_STORAGE_BACKEND: postgresql
+      MEMORYLAYER_POSTGRESQL_URL: postgresql://memorylayer:${ML_PASSWORD_ALPHA}@ml-postgres-alpha:5432/memorylayer
+      MEMORYLAYER_AUTO_MIGRATE: '0'
+      MEMORYLAYER_CACHE_SERVICE: aether-kv
+      MEMORYLAYER_RATE_LIMIT_SERVICE: aether-kv
+      MEMORYLAYER_AUDIT_SERVICE: postgresql
+      MEMORYLAYER_AUTHENTICATION_SERVICE: aether
+      MEMORYLAYER_AETHER_TERMINATOR_HEADER_MODE: passthrough
+      MEMORYLAYER_METRICS_SERVICE: noop
+      MEMORYLAYER_TASKS_INPROCESS_WORKER: 'true'
+      MEMORYLAYER_EMBEDDING_DIMENSIONS: '1536'
+      MEMORYLAYER_EMBED_TRANSPORT: http
+      MEMORYLAYER_EMBED_SERVER_URL: ${EMBED_ENDPOINT:?Configure embedding endpoint
+        or fixtures}
+      MEMORYLAYER_ENTITY_LINKER_PROVIDER: none
+      MEMORYLAYER_DOCUMENT_TRANSCRIBE_ENABLED: 'false'
+      MEMORYLAYER_CHAT_TITLE_ENABLED: '0'
+      MEMORYLAYER_OTEL_ENABLED: 'false'
+      MEMORYLAYER_GRAPH_ANALYSIS_PROVIDER: default
+      MEMORYLAYER_GRAPH_QUERY_PROVIDER: default
+      MEMORYLAYER_RATE_LIMIT_REQUESTS: '10000'
+      MEMORYLAYER_DATA_DIR: /home/memorylayer
+      MEMORYLAYER_BLOB_STORAGE_BASE_PATH: /home/memorylayer/blobs
+      MEMORYLAYER_TENANT_ID: alpha
+      MEMORYLAYER_LLM_PROFILE_DEFAULT_PROVIDER: openai
+      MEMORYLAYER_LLM_PROFILE_DEFAULT_MODEL: memorylayer-default
+      MEMORYLAYER_LLM_PROFILE_DEFAULT_BASE_URL: http://gateway:8080/v1
+      MEMORYLAYER_LLM_IDENTITY_HEADER_HOSTS: gateway
+    networks:
+    - tenant-alpha
+    - storage-api
+    volumes:
+    - ../.local/alpha/tls/memorylayer:/run/tls:ro
+    - memorylayer-data-alpha:/home/memorylayer
+    depends_on:
+      ml-migrate-alpha:
+        condition: service_completed_successfully
+      acl-alpha:
+        condition: service_completed_successfully
+    healthcheck:
+      test:
+      - CMD
+      - python
+      - -c
+      - import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health/ready',timeout=3)
+      interval: 5s
+      timeout: 5s
+      retries: 45
+      start_period: 15s
+    env_file:
+    - ../.local/alpha/memorylayer.env
+  dc-migrate-alpha:
+    image: ${CONNECTORS_IMAGE:?Run build.py}
+    entrypoint:
+    - python
+    - -c
+    command:
+    - from data_connectors.db.engine import run_migrations; run_migrations()
+    environment:
+      DC_POSTGRESQL_URL: postgresql://dataconnectors:${DC_PASSWORD_ALPHA}@dc-postgres-alpha:5432/dataconnectors
+    networks:
+    - tenant-alpha
+    depends_on:
+      dc-postgres-alpha:
+        condition: service_healthy
+    restart: 'no'
+    labels:
+      platform.scitrera.io/lifecycle: job
+  connectors-alpha:
+    image: ${CONNECTORS_IMAGE:?Run build.py}
+    environment:
+      AETHER_GATEWAY: aether-alpha:50051
+      AETHER_AUTH: none
+      AETHER_TLS_ENABLED: 'true'
+      AETHER_TLS_CA_CERT: /run/tls/ca.crt
+      AETHER_TLS_CLIENT_CERT: /run/tls/tls.crt
+      AETHER_TLS_CLIENT_KEY: /run/tls/tls.key
+      SCITRERA_TENANT: alpha
+      LOGGING_LEVEL: INFO
+      AETHER_MAX_RECONNECT_ATTEMPTS: '0'
+      AETHER_GATEWAY_ADDR: aether-alpha:50051
+      DC_HOST: 0.0.0.0
+      DC_PORT: '8100'
+      DC_SERVICE_SPECIFIER: alpha
+      DC_POSTGRESQL_URL: postgresql://dataconnectors:${DC_PASSWORD_ALPHA}@dc-postgres-alpha:5432/dataconnectors
+      DC_VFS_AUTHORIZATION_MODE: aether
+      DC_BLOB_TYPE: blobgw
+      DC_BLOBGW_URL: http://blobgw:8080
+      DC_BLOBGW_EDGE_URL: http://storage-edge:8090
+      DC_BLOBGW_EDGE_PUBLIC_URL: http://127.0.0.1:${WEB_PORT}/storage/alpha
+      DC_BLOBGW_DOWNLOAD_REQUIRE_AUTH: 'true'
+      DC_BLOBGW_DOMAIN: alpha
+      MEMORYLAYER_OTEL_ENABLED: 'false'
+      DC_BLOBGW_UPLOAD_PUBLIC_URL: http://127.0.0.1:${WEB_PORT}/storage/alpha/uploads
+      DC_BLOBGW_FETCH_BASE_URL: http://storage-download:8080
+      DC_BLOBGW_UPLOAD_INTERNAL_URL: http://storage-download:8080/uploads
+    networks:
+    - tenant-alpha
+    - storage-api
+    volumes:
+    - ../.local/alpha/tls/data-connectors:/run/tls:ro
+    depends_on:
+      dc-migrate-alpha:
+        condition: service_completed_successfully
+      acl-alpha:
+        condition: service_completed_successfully
+      storage-edge:
+        condition: service_started
+    healthcheck:
+      test:
+      - CMD
+      - python
+      - -c
+      - import urllib.request; urllib.request.urlopen('http://127.0.0.1:8100/healthz',timeout=3)
+      interval: 5s
+      timeout: 5s
+      retries: 45
+      start_period: 15s
+  catalog-alpha:
+    image: ${BACKEND_IMAGE:?Run build.py}
+    command:
+    - python
+    - /integration/tenant_setup.py
+    environment:
+      AETHER_GATEWAY: aether-alpha:50051
+      AETHER_AUTH: none
+      AETHER_TLS_ENABLED: 'true'
+      AETHER_TLS_CA_CERT: /run/tls/ca.crt
+      AETHER_TLS_CLIENT_CERT: /run/tls/tls.crt
+      AETHER_TLS_CLIENT_KEY: /run/tls/tls.key
+      SCITRERA_TENANT: alpha
+      LOGGING_LEVEL: INFO
+      AETHER_MAX_RECONNECT_ATTEMPTS: '0'
+      AETHER_GATEWAY_ADDR: aether-alpha:50051
+      TENANT_ID: alpha
+      ADMIN_EMAIL: alice@example.test
+      AETHER_MGMT_TLS_CLIENT_CERT: /run/management/tls.crt
+      AETHER_MGMT_TLS_CLIENT_KEY: /run/management/tls.key
+      AETHER_MGMT_TLS_CA_CERT: /run/management/ca.crt
+      AETHER_MGMT_SPECIFIER: bootstrap
+      MINT_ORCH_IMPL: default
+      MINT_ORCH_SPEC: bootstrap
+    volumes:
+    - ../.local/alpha/tls/orchestrator:/run/tls:ro
+    - ../.local/alpha/tls/management:/run/management:ro
+    - ../scripts:/integration:ro
+    networks:
+    - tenant-alpha
+    depends_on:
+      memorylayer-alpha:
+        condition: service_healthy
+      connectors-alpha:
+        condition: service_healthy
+    restart: 'no'
+    labels:
+      platform.scitrera.io/lifecycle: job
+  bridge-alpha:
+    image: ${BACKEND_IMAGE:?Run build.py}
+    command:
+    - python
+    - -m
+    - x_platform_bridge
+    environment:
+      AETHER_GATEWAY: aether-alpha:50051
+      AETHER_AUTH: none
+      AETHER_TLS_ENABLED: 'true'
+      AETHER_TLS_CA_CERT: /run/tls/ca.crt
+      AETHER_TLS_CLIENT_CERT: /run/tls/tls.crt
+      AETHER_TLS_CLIENT_KEY: /run/tls/tls.key
+      SCITRERA_TENANT: alpha
+      LOGGING_LEVEL: INFO
+      AETHER_MAX_RECONNECT_ATTEMPTS: '0'
+      AETHER_GATEWAY_ADDR: aether-alpha:50051
+      PLATFORM_BRIDGE_SEMANTIC_TOOL_SEARCH: 'false'
+    volumes:
+    - ../.local/alpha/tls/platform-bridge:/run/tls:ro
+    networks:
+    - tenant-alpha
+    depends_on:
+      catalog-alpha:
+        condition: service_completed_successfully
+  tool-catalog-alpha:
+    image: ${SAHARA_IMAGE:?Run build.py}
+    entrypoint:
+    - /usr/local/bin/tool-catalog-service
+    environment:
+      AETHER_GATEWAY: aether-alpha:50051
+      AETHER_AUTH: none
+      AETHER_TLS_ENABLED: 'true'
+      AETHER_TLS_CA_CERT: /run/tls/ca.crt
+      AETHER_TLS_CLIENT_CERT: /run/tls/tls.crt
+      AETHER_TLS_CLIENT_KEY: /run/tls/tls.key
+      SCITRERA_TENANT: alpha
+      LOGGING_LEVEL: INFO
+      AETHER_MAX_RECONNECT_ATTEMPTS: '0'
+      AETHER_GATEWAY_ADDR: aether-alpha:50051
+      TOOL_CATALOG_CURSOR_KEY: ${AETHER_HMAC_ALPHA}
+    volumes:
+    - ../.local/alpha/tls/tool-catalog:/run/tls:ro
+    networks:
+    - tenant-alpha
+    depends_on:
+      acl-alpha:
+        condition: service_completed_successfully
+  provider-alpha:
+    image: ${PROVIDER_IMAGE:?Run build.py}
+    environment:
+      AETHER_GATEWAY: aether-alpha:50051
+      AETHER_AUTH: none
+      AETHER_TLS_ENABLED: 'true'
+      AETHER_TLS_CA_CERT: /run/tls/ca.crt
+      AETHER_TLS_CLIENT_CERT: /run/tls/tls.crt
+      AETHER_TLS_CLIENT_KEY: /run/tls/tls.key
+      SCITRERA_TENANT: alpha
+      LOGGING_LEVEL: INFO
+      AETHER_MAX_RECONNECT_ATTEMPTS: '0'
+      AETHER_GATEWAY_ADDR: aether-alpha:50051
+      AETHER_SERVER_ADDR: aether-alpha:50051
+      SANDBOX_TENANT_ID: alpha
+      SANDBOX_PROVIDER: docker
+      SANDBOX_SERVICE_SPECIFIER: alpha
+      SANDBOX_IMAGE: ${SAHARA_IMAGE}
+      SANDBOX_SIDECAR_IMAGE: ${SIDECAR_IMAGE}
+      SANDBOX_AETHER_NETWORK: ${COMPOSE_PROJECT_NAME}_tenant-alpha
+      SANDBOX_DATA_DIR: ${SANDBOX_HOST_ROOT}/alpha
+      SANDBOX_SIDECAR_ENABLED: 'true'
+      SANDBOX_DEFAULT_SANDBOX_CLASS: standard
+      SANDBOX_MEMORY_LIMIT: 2g
+      SANDBOX_CPU_LIMIT: '2'
+      SANDBOX_SNAPSHOT_COMPRESSION: zstd
+      SANDBOX_DOCKER_CONTROL_CONTAINER: ${COMPOSE_PROJECT_NAME}-provider-alpha
+      SANDBOX_DOCKER_INSTANCE: ${COMPOSE_PROJECT_NAME}
+      SANDBOX_SNAPSHOT_LOCAL_DIR: ${SANDBOX_HOST_ROOT}/alpha/snapshots
+      SANDBOX_SIDECAR_TLS_CA_CERT: /run/anonymous/ca.crt
+      SANDBOX_SIDECAR_TLS_CLIENT_CERT: /run/anonymous/tls.crt
+      SANDBOX_SIDECAR_TLS_CLIENT_KEY: /run/anonymous/tls.key
+    volumes:
+    - /var/run/docker.sock:/var/run/docker.sock
+    - ${SANDBOX_HOST_ROOT}:${SANDBOX_HOST_ROOT}
+    - ../.local/alpha/tls/sandbox-provider:/run/tls:ro
+    - ../.local/alpha/tls/anonymous:/run/anonymous:ro
+    networks:
+    - tenant-alpha
+    depends_on:
+      catalog-alpha:
+        condition: service_completed_successfully
+    container_name: ${COMPOSE_PROJECT_NAME}-provider-alpha
+  ml-postgres-beta:
+    image: ${ML_POSTGRES_IMAGE:?Run build.py}
+    environment:
+      POSTGRES_DB: memorylayer
+      POSTGRES_USER: memorylayer
+      POSTGRES_PASSWORD: ${ML_PASSWORD_BETA}
+    volumes:
+    - ml-postgres-beta:/var/lib/postgresql/data
+    networks:
+    - tenant-beta
+    healthcheck:
+      test:
+      - CMD-SHELL
+      - pg_isready -U memorylayer -d memorylayer
+      interval: 3s
+      timeout: 3s
+      retries: 40
+  dc-postgres-beta:
+    image: postgres:17.11-alpine@sha256:18cfe3ef5e6815560c98237d6216d1e5119702fb0f3894c8785dd58b8bbe5d73
+    environment:
+      POSTGRES_DB: dataconnectors
+      POSTGRES_USER: dataconnectors
+      POSTGRES_PASSWORD: ${DC_PASSWORD_BETA}
+    volumes:
+    - dc-postgres-beta:/var/lib/postgresql/data
+    networks:
+    - tenant-beta
+    healthcheck:
+      test:
+      - CMD-SHELL
+      - pg_isready -U dataconnectors -d dataconnectors
+      interval: 3s
+      timeout: 3s
+      retries: 40
+  ml-migrate-beta:
+    image: ${MEMORYLAYER_IMAGE:?Run build.py}
+    entrypoint:
+    - python
+    command:
+    - /integration/memorylayer_migrate.py
+    environment:
+      MEMORYLAYER_POSTGRESQL_URL: postgresql://memorylayer:${ML_PASSWORD_BETA}@ml-postgres-beta:5432/memorylayer
+      MEMORYLAYER_AUTO_MIGRATE: '1'
+      MEMORYLAYER_EMBEDDING_DIMENSIONS: '1536'
+    networks:
+    - tenant-beta
+    depends_on:
+      ml-db-prepare-beta:
+        condition: service_completed_successfully
+    restart: 'no'
+    volumes:
+    - ../scripts:/integration:ro
+    labels:
+      platform.scitrera.io/lifecycle: job
+  memorylayer-beta:
+    image: ${MEMORYLAYER_IMAGE:?Run build.py}
+    environment:
+      AETHER_GATEWAY: aether-beta:50051
+      AETHER_AUTH: none
+      AETHER_TLS_ENABLED: 'true'
+      AETHER_TLS_CA_CERT: /run/tls/ca.crt
+      AETHER_TLS_CLIENT_CERT: /run/tls/tls.crt
+      AETHER_TLS_CLIENT_KEY: /run/tls/tls.key
+      SCITRERA_TENANT: beta
+      LOGGING_LEVEL: INFO
+      AETHER_MAX_RECONNECT_ATTEMPTS: '0'
+      AETHER_GATEWAY_ADDR: aether-beta:50051
+      MEMORYLAYER_SERVER_HOST: 0.0.0.0
+      MEMORYLAYER_SERVER_PORT: '8000'
+      MEMORYLAYER_STORAGE_BACKEND: postgresql
+      MEMORYLAYER_POSTGRESQL_URL: postgresql://memorylayer:${ML_PASSWORD_BETA}@ml-postgres-beta:5432/memorylayer
+      MEMORYLAYER_AUTO_MIGRATE: '0'
+      MEMORYLAYER_CACHE_SERVICE: aether-kv
+      MEMORYLAYER_RATE_LIMIT_SERVICE: aether-kv
+      MEMORYLAYER_AUDIT_SERVICE: postgresql
+      MEMORYLAYER_AUTHENTICATION_SERVICE: aether
+      MEMORYLAYER_AETHER_TERMINATOR_HEADER_MODE: passthrough
+      MEMORYLAYER_METRICS_SERVICE: noop
+      MEMORYLAYER_TASKS_INPROCESS_WORKER: 'true'
+      MEMORYLAYER_EMBEDDING_DIMENSIONS: '1536'
+      MEMORYLAYER_EMBED_TRANSPORT: http
+      MEMORYLAYER_EMBED_SERVER_URL: ${EMBED_ENDPOINT:?Configure embedding endpoint
+        or fixtures}
+      MEMORYLAYER_ENTITY_LINKER_PROVIDER: none
+      MEMORYLAYER_DOCUMENT_TRANSCRIBE_ENABLED: 'false'
+      MEMORYLAYER_CHAT_TITLE_ENABLED: '0'
+      MEMORYLAYER_OTEL_ENABLED: 'false'
+      MEMORYLAYER_GRAPH_ANALYSIS_PROVIDER: default
+      MEMORYLAYER_GRAPH_QUERY_PROVIDER: default
+      MEMORYLAYER_RATE_LIMIT_REQUESTS: '10000'
+      MEMORYLAYER_DATA_DIR: /home/memorylayer
+      MEMORYLAYER_BLOB_STORAGE_BASE_PATH: /home/memorylayer/blobs
+      MEMORYLAYER_TENANT_ID: beta
+      MEMORYLAYER_LLM_PROFILE_DEFAULT_PROVIDER: openai
+      MEMORYLAYER_LLM_PROFILE_DEFAULT_MODEL: memorylayer-default
+      MEMORYLAYER_LLM_PROFILE_DEFAULT_BASE_URL: http://gateway:8080/v1
+      MEMORYLAYER_LLM_IDENTITY_HEADER_HOSTS: gateway
+    networks:
+    - tenant-beta
+    - storage-api
+    volumes:
+    - ../.local/beta/tls/memorylayer:/run/tls:ro
+    - memorylayer-data-beta:/home/memorylayer
+    depends_on:
+      ml-migrate-beta:
+        condition: service_completed_successfully
+      acl-beta:
+        condition: service_completed_successfully
+    healthcheck:
+      test:
+      - CMD
+      - python
+      - -c
+      - import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health/ready',timeout=3)
+      interval: 5s
+      timeout: 5s
+      retries: 45
+      start_period: 15s
+    env_file:
+    - ../.local/beta/memorylayer.env
+  dc-migrate-beta:
+    image: ${CONNECTORS_IMAGE:?Run build.py}
+    entrypoint:
+    - python
+    - -c
+    command:
+    - from data_connectors.db.engine import run_migrations; run_migrations()
+    environment:
+      DC_POSTGRESQL_URL: postgresql://dataconnectors:${DC_PASSWORD_BETA}@dc-postgres-beta:5432/dataconnectors
+    networks:
+    - tenant-beta
+    depends_on:
+      dc-postgres-beta:
+        condition: service_healthy
+    restart: 'no'
+    labels:
+      platform.scitrera.io/lifecycle: job
+  connectors-beta:
+    image: ${CONNECTORS_IMAGE:?Run build.py}
+    environment:
+      AETHER_GATEWAY: aether-beta:50051
+      AETHER_AUTH: none
+      AETHER_TLS_ENABLED: 'true'
+      AETHER_TLS_CA_CERT: /run/tls/ca.crt
+      AETHER_TLS_CLIENT_CERT: /run/tls/tls.crt
+      AETHER_TLS_CLIENT_KEY: /run/tls/tls.key
+      SCITRERA_TENANT: beta
+      LOGGING_LEVEL: INFO
+      AETHER_MAX_RECONNECT_ATTEMPTS: '0'
+      AETHER_GATEWAY_ADDR: aether-beta:50051
+      DC_HOST: 0.0.0.0
+      DC_PORT: '8100'
+      DC_SERVICE_SPECIFIER: beta
+      DC_POSTGRESQL_URL: postgresql://dataconnectors:${DC_PASSWORD_BETA}@dc-postgres-beta:5432/dataconnectors
+      DC_VFS_AUTHORIZATION_MODE: aether
+      DC_BLOB_TYPE: blobgw
+      DC_BLOBGW_URL: http://blobgw:8080
+      DC_BLOBGW_EDGE_URL: http://storage-edge:8090
+      DC_BLOBGW_EDGE_PUBLIC_URL: http://127.0.0.1:${WEB_PORT}/storage/beta
+      DC_BLOBGW_DOWNLOAD_REQUIRE_AUTH: 'true'
+      DC_BLOBGW_DOMAIN: beta
+      MEMORYLAYER_OTEL_ENABLED: 'false'
+      DC_BLOBGW_UPLOAD_PUBLIC_URL: http://127.0.0.1:${WEB_PORT}/storage/beta/uploads
+      DC_BLOBGW_FETCH_BASE_URL: http://storage-download:8080
+      DC_BLOBGW_UPLOAD_INTERNAL_URL: http://storage-download:8080/uploads
+    networks:
+    - tenant-beta
+    - storage-api
+    volumes:
+    - ../.local/beta/tls/data-connectors:/run/tls:ro
+    depends_on:
+      dc-migrate-beta:
+        condition: service_completed_successfully
+      acl-beta:
+        condition: service_completed_successfully
+      storage-edge:
+        condition: service_started
+    healthcheck:
+      test:
+      - CMD
+      - python
+      - -c
+      - import urllib.request; urllib.request.urlopen('http://127.0.0.1:8100/healthz',timeout=3)
+      interval: 5s
+      timeout: 5s
+      retries: 45
+      start_period: 15s
+  catalog-beta:
+    image: ${BACKEND_IMAGE:?Run build.py}
+    command:
+    - python
+    - /integration/tenant_setup.py
+    environment:
+      AETHER_GATEWAY: aether-beta:50051
+      AETHER_AUTH: none
+      AETHER_TLS_ENABLED: 'true'
+      AETHER_TLS_CA_CERT: /run/tls/ca.crt
+      AETHER_TLS_CLIENT_CERT: /run/tls/tls.crt
+      AETHER_TLS_CLIENT_KEY: /run/tls/tls.key
+      SCITRERA_TENANT: beta
+      LOGGING_LEVEL: INFO
+      AETHER_MAX_RECONNECT_ATTEMPTS: '0'
+      AETHER_GATEWAY_ADDR: aether-beta:50051
+      TENANT_ID: beta
+      ADMIN_EMAIL: bob@example.test
+      AETHER_MGMT_TLS_CLIENT_CERT: /run/management/tls.crt
+      AETHER_MGMT_TLS_CLIENT_KEY: /run/management/tls.key
+      AETHER_MGMT_TLS_CA_CERT: /run/management/ca.crt
+      AETHER_MGMT_SPECIFIER: bootstrap
+      MINT_ORCH_IMPL: default
+      MINT_ORCH_SPEC: bootstrap
+    volumes:
+    - ../.local/beta/tls/orchestrator:/run/tls:ro
+    - ../.local/beta/tls/management:/run/management:ro
+    - ../scripts:/integration:ro
+    networks:
+    - tenant-beta
+    depends_on:
+      memorylayer-beta:
+        condition: service_healthy
+      connectors-beta:
+        condition: service_healthy
+    restart: 'no'
+    labels:
+      platform.scitrera.io/lifecycle: job
+  bridge-beta:
+    image: ${BACKEND_IMAGE:?Run build.py}
+    command:
+    - python
+    - -m
+    - x_platform_bridge
+    environment:
+      AETHER_GATEWAY: aether-beta:50051
+      AETHER_AUTH: none
+      AETHER_TLS_ENABLED: 'true'
+      AETHER_TLS_CA_CERT: /run/tls/ca.crt
+      AETHER_TLS_CLIENT_CERT: /run/tls/tls.crt
+      AETHER_TLS_CLIENT_KEY: /run/tls/tls.key
+      SCITRERA_TENANT: beta
+      LOGGING_LEVEL: INFO
+      AETHER_MAX_RECONNECT_ATTEMPTS: '0'
+      AETHER_GATEWAY_ADDR: aether-beta:50051
+      PLATFORM_BRIDGE_SEMANTIC_TOOL_SEARCH: 'false'
+    volumes:
+    - ../.local/beta/tls/platform-bridge:/run/tls:ro
+    networks:
+    - tenant-beta
+    depends_on:
+      catalog-beta:
+        condition: service_completed_successfully
+  tool-catalog-beta:
+    image: ${SAHARA_IMAGE:?Run build.py}
+    entrypoint:
+    - /usr/local/bin/tool-catalog-service
+    environment:
+      AETHER_GATEWAY: aether-beta:50051
+      AETHER_AUTH: none
+      AETHER_TLS_ENABLED: 'true'
+      AETHER_TLS_CA_CERT: /run/tls/ca.crt
+      AETHER_TLS_CLIENT_CERT: /run/tls/tls.crt
+      AETHER_TLS_CLIENT_KEY: /run/tls/tls.key
+      SCITRERA_TENANT: beta
+      LOGGING_LEVEL: INFO
+      AETHER_MAX_RECONNECT_ATTEMPTS: '0'
+      AETHER_GATEWAY_ADDR: aether-beta:50051
+      TOOL_CATALOG_CURSOR_KEY: ${AETHER_HMAC_BETA}
+    volumes:
+    - ../.local/beta/tls/tool-catalog:/run/tls:ro
+    networks:
+    - tenant-beta
+    depends_on:
+      acl-beta:
+        condition: service_completed_successfully
+  provider-beta:
+    image: ${PROVIDER_IMAGE:?Run build.py}
+    environment:
+      AETHER_GATEWAY: aether-beta:50051
+      AETHER_AUTH: none
+      AETHER_TLS_ENABLED: 'true'
+      AETHER_TLS_CA_CERT: /run/tls/ca.crt
+      AETHER_TLS_CLIENT_CERT: /run/tls/tls.crt
+      AETHER_TLS_CLIENT_KEY: /run/tls/tls.key
+      SCITRERA_TENANT: beta
+      LOGGING_LEVEL: INFO
+      AETHER_MAX_RECONNECT_ATTEMPTS: '0'
+      AETHER_GATEWAY_ADDR: aether-beta:50051
+      AETHER_SERVER_ADDR: aether-beta:50051
+      SANDBOX_TENANT_ID: beta
+      SANDBOX_PROVIDER: docker
+      SANDBOX_SERVICE_SPECIFIER: beta
+      SANDBOX_IMAGE: ${SAHARA_IMAGE}
+      SANDBOX_SIDECAR_IMAGE: ${SIDECAR_IMAGE}
+      SANDBOX_AETHER_NETWORK: ${COMPOSE_PROJECT_NAME}_tenant-beta
+      SANDBOX_DATA_DIR: ${SANDBOX_HOST_ROOT}/beta
+      SANDBOX_SIDECAR_ENABLED: 'true'
+      SANDBOX_DEFAULT_SANDBOX_CLASS: standard
+      SANDBOX_MEMORY_LIMIT: 2g
+      SANDBOX_CPU_LIMIT: '2'
+      SANDBOX_SNAPSHOT_COMPRESSION: zstd
+      SANDBOX_DOCKER_CONTROL_CONTAINER: ${COMPOSE_PROJECT_NAME}-provider-beta
+      SANDBOX_DOCKER_INSTANCE: ${COMPOSE_PROJECT_NAME}
+      SANDBOX_SNAPSHOT_LOCAL_DIR: ${SANDBOX_HOST_ROOT}/beta/snapshots
+      SANDBOX_SIDECAR_TLS_CA_CERT: /run/anonymous/ca.crt
+      SANDBOX_SIDECAR_TLS_CLIENT_CERT: /run/anonymous/tls.crt
+      SANDBOX_SIDECAR_TLS_CLIENT_KEY: /run/anonymous/tls.key
+    volumes:
+    - /var/run/docker.sock:/var/run/docker.sock
+    - ${SANDBOX_HOST_ROOT}:${SANDBOX_HOST_ROOT}
+    - ../.local/beta/tls/sandbox-provider:/run/tls:ro
+    - ../.local/beta/tls/anonymous:/run/anonymous:ro
+    networks:
+    - tenant-beta
+    depends_on:
+      catalog-beta:
+        condition: service_completed_successfully
+    container_name: ${COMPOSE_PROJECT_NAME}-provider-beta
+  ml-db-prepare-alpha:
+    image: postgres:17.11-alpine@sha256:18cfe3ef5e6815560c98237d6216d1e5119702fb0f3894c8785dd58b8bbe5d73
+    entrypoint:
+    - psql
+    command:
+    - -v
+    - ON_ERROR_STOP=1
+    - -c
+    - ALTER ROLE memorylayer SET search_path = public, ag_catalog; ALTER DATABASE
+      memorylayer SET search_path = public, ag_catalog;
+    environment:
+      PGHOST: ml-postgres-alpha
+      PGUSER: memorylayer
+      PGDATABASE: memorylayer
+      PGPASSWORD: ${ML_PASSWORD_ALPHA}
+    networks:
+    - tenant-alpha
+    depends_on:
+      ml-postgres-alpha:
+        condition: service_healthy
+    restart: 'no'
+    labels:
+      platform.scitrera.io/lifecycle: job
+  ml-db-prepare-beta:
+    image: postgres:17.11-alpine@sha256:18cfe3ef5e6815560c98237d6216d1e5119702fb0f3894c8785dd58b8bbe5d73
+    entrypoint:
+    - psql
+    command:
+    - -v
+    - ON_ERROR_STOP=1
+    - -c
+    - ALTER ROLE memorylayer SET search_path = public, ag_catalog; ALTER DATABASE
+      memorylayer SET search_path = public, ag_catalog;
+    environment:
+      PGHOST: ml-postgres-beta
+      PGUSER: memorylayer
+      PGDATABASE: memorylayer
+      PGPASSWORD: ${ML_PASSWORD_BETA}
+    networks:
+    - tenant-beta
+    depends_on:
+      ml-postgres-beta:
+        condition: service_healthy
+    restart: 'no'
+    labels:
+      platform.scitrera.io/lifecycle: job
+  sparkroute-postgres:
+    image: postgres:17.11-alpine@sha256:18cfe3ef5e6815560c98237d6216d1e5119702fb0f3894c8785dd58b8bbe5d73
+    environment:
+      POSTGRES_DB: sparkroute
+      POSTGRES_USER: sparkroute
+      POSTGRES_PASSWORD: ${SPARKROUTE_PASSWORD}
+    volumes:
+    - sparkroute-postgres:/var/lib/postgresql/data
+    networks:
+    - model-state
+    healthcheck:
+      test:
+      - CMD-SHELL
+      - pg_isready -U sparkroute -d sparkroute
+      interval: 3s
+      timeout: 3s
+      retries: 40
+  gateway-migrate:
+    image: ${SPARKROUTE_IMAGE:?Supply a permitted SparkRoute enterprise image}
+    command:
+    - migrate
+    - --components
+    - ledger,runtime
+    environment:
+      SPARKROUTE_POSTGRES_URL: postgres://sparkroute:${SPARKROUTE_PASSWORD}@sparkroute-postgres:5432/sparkroute?sslmode=disable
+      SPARKROUTE_RUNTIME_POSTGRES_URL: postgres://sparkroute:${SPARKROUTE_PASSWORD}@sparkroute-postgres:5432/sparkroute?sslmode=disable
+    networks:
+    - model-state
+    depends_on:
+      sparkroute-postgres:
+        condition: service_healthy
+    restart: 'no'
+    labels:
+      platform.scitrera.io/lifecycle: job
+  gateway:
+    image: ${SPARKROUTE_IMAGE:?Supply a permitted SparkRoute enterprise image}
+    user: ${LOCAL_UID}:${LOCAL_GID}
+    environment:
+      SPARKROUTE_CONFIG: /run/gateway/config.json
+      SPARKROUTE_DATA_ADDRESS: :8080
+      SPARKROUTE_ADMIN_ADDRESS: 127.0.0.1:8081
+      SPARKROUTE_OPERATIONS_ADDRESS: 127.0.0.1:9090
+      SPARKROUTE_POSTGRES_URL: postgres://sparkroute:${SPARKROUTE_PASSWORD}@sparkroute-postgres:5432/sparkroute?sslmode=disable
+      SPARKROUTE_RUNTIME_POSTGRES_URL: postgres://sparkroute:${SPARKROUTE_PASSWORD}@sparkroute-postgres:5432/sparkroute?sslmode=disable
+      SPARKROUTE_POSTGRES_AUTO_MIGRATE: 'false'
+      SPARKROUTE_RUNTIME_POSTGRES_AUTO_MIGRATE: 'false'
+      SPARKROUTE_CALLER_AUTH_MODE: bearer
+      SPARKROUTE_CALLER_AUTH_CONFIG_REF: file:///run/gateway/callers.json
+      SPARKROUTE_CALLER_AUTH_HEADERS: "{\n  \"tenant\": [\"X-Scitrera-Tenant\"],\n\
+        \  \"user\": [\"X-Scitrera-User\"],\n  \"source\": [\"X-Scitrera-Source\"\
+        ],\n  \"workspace\": [\"X-Scitrera-Workspace\"],\n  \"thread_id\": [\"X-Scitrera-Thread-Id\"\
+        ],\n  \"task_id\": [\"X-Scitrera-Task-Id\"],\n  \"experiment\": [\"X-Scitrera-Experiment\"\
+        ],\n  \"session\": [\"X-Scitrera-Session\"],\n  \"mlflow_experiment_id\":\
+        \ [\"X-MLflow-Experiment-Id\"]\n}"
+      SPARKROUTE_CREDENTIAL_FILE_ROOTS: /run/gateway
+      SPARKROUTE_MODEL_CATALOG_KIND: aether
+      SPARKROUTE_MODEL_CATALOG_SOURCE_ID: tenant-aether
+      SPARKROUTE_MODEL_CATALOG_AETHER_ADDRESS_TEMPLATE: aether-{tenant}:50051
+      SPARKROUTE_MODEL_CATALOG_AETHER_SERVER_NAME_TEMPLATE: aether-{tenant}
+      SPARKROUTE_MODEL_CATALOG_AETHER_CREDENTIAL_FILE_TEMPLATE: file:///run/gateway/catalog-{tenant}.json
+      SPARKROUTE_MODEL_CATALOG_AETHER_REPLICA_ID: compose-gateway
+      SPARKROUTE_MODEL_CATALOG_ALLOWED_PROVIDER_HOSTS: ${MODEL_PROVIDER_HOSTS:?Set
+        the provider host allowlist}
+      SPARKROUTE_MODEL_CATALOG_PROVIDER_ALLOW_HTTP: ${MODEL_PROVIDER_ALLOW_HTTP:-false}
+      SPARKROUTE_MODEL_CATALOG_ALLOWED_CREDENTIAL_SCHEMES: file
+    volumes:
+    - ../.local/gateway:/run/gateway:ro
+    networks:
+      tenant-alpha:
+        aliases:
+        - llm-gateway.mt
+      tenant-beta:
+        aliases:
+        - llm-gateway.mt
+      model-state: {}
+    depends_on:
+      gateway-migrate:
+        condition: service_completed_successfully
+      models-alpha-sahara-default:
+        condition: service_completed_successfully
+      models-alpha-sahara-vision-advanced:
+        condition: service_completed_successfully
+      models-alpha-sahara-text-advanced:
+        condition: service_completed_successfully
+      models-beta-sahara-default:
+        condition: service_completed_successfully
+      models-beta-sahara-vision-advanced:
+        condition: service_completed_successfully
+      models-beta-sahara-text-advanced:
+        condition: service_completed_successfully
+  skills-alpha:
+    image: ${SKILLS_IMAGE:?Run build.py}
+    command:
+    - python
+    - -m
+    - x_seed_skills
+    environment:
+      AETHER_GATEWAY: aether-alpha:50051
+      AETHER_AUTH: none
+      AETHER_TLS_ENABLED: 'true'
+      AETHER_TLS_CA_CERT: /run/tls/ca.crt
+      AETHER_TLS_CLIENT_CERT: /run/tls/tls.crt
+      AETHER_TLS_CLIENT_KEY: /run/tls/tls.key
+      SCITRERA_TENANT: alpha
+      LOGGING_LEVEL: INFO
+      AETHER_MAX_RECONNECT_ATTEMPTS: '0'
+      AETHER_GATEWAY_ADDR: aether-alpha:50051
+      TENANT_ID: alpha
+      ADMIN_EMAIL: alice@example.test
+      AETHER_MGMT_TLS_CLIENT_CERT: /run/management/tls.crt
+      AETHER_MGMT_TLS_CLIENT_KEY: /run/management/tls.key
+      AETHER_MGMT_TLS_CA_CERT: /run/management/ca.crt
+      AETHER_MGMT_SPECIFIER: bootstrap
+      MINT_ORCH_IMPL: default
+      MINT_ORCH_SPEC: bootstrap
+      SKILL_SEED_PRINCIPAL_TYPE: service
+      SKILL_SEED_WORKSPACE: _global
+    volumes:
+    - ../.local/alpha/tls/orchestrator:/run/tls:ro
+    - ../.local/alpha/tls/management:/run/management:ro
+    - ../scripts:/integration:ro
+    networks:
+    - tenant-alpha
+    depends_on:
+      catalog-alpha:
+        condition: service_completed_successfully
+    restart: 'no'
+    labels:
+      platform.scitrera.io/lifecycle: job
+  skills-beta:
+    image: ${SKILLS_IMAGE:?Run build.py}
+    command:
+    - python
+    - -m
+    - x_seed_skills
+    environment:
+      AETHER_GATEWAY: aether-beta:50051
+      AETHER_AUTH: none
+      AETHER_TLS_ENABLED: 'true'
+      AETHER_TLS_CA_CERT: /run/tls/ca.crt
+      AETHER_TLS_CLIENT_CERT: /run/tls/tls.crt
+      AETHER_TLS_CLIENT_KEY: /run/tls/tls.key
+      SCITRERA_TENANT: beta
+      LOGGING_LEVEL: INFO
+      AETHER_MAX_RECONNECT_ATTEMPTS: '0'
+      AETHER_GATEWAY_ADDR: aether-beta:50051
+      TENANT_ID: beta
+      ADMIN_EMAIL: bob@example.test
+      AETHER_MGMT_TLS_CLIENT_CERT: /run/management/tls.crt
+      AETHER_MGMT_TLS_CLIENT_KEY: /run/management/tls.key
+      AETHER_MGMT_TLS_CA_CERT: /run/management/ca.crt
+      AETHER_MGMT_SPECIFIER: bootstrap
+      MINT_ORCH_IMPL: default
+      MINT_ORCH_SPEC: bootstrap
+      SKILL_SEED_PRINCIPAL_TYPE: service
+      SKILL_SEED_WORKSPACE: _global
+    volumes:
+    - ../.local/beta/tls/orchestrator:/run/tls:ro
+    - ../.local/beta/tls/management:/run/management:ro
+    - ../scripts:/integration:ro
+    networks:
+    - tenant-beta
+    depends_on:
+      catalog-beta:
+        condition: service_completed_successfully
+    restart: 'no'
+    labels:
+      platform.scitrera.io/lifecycle: job
+  storage-download:
+    image: ${WEB_IMAGE:?Run build.py}
+    user: 1000:1000
+    entrypoint:
+    - nginx
+    - -g
+    - daemon off;
+    read_only: true
+    tmpfs:
+    - /tmp
+    cap_drop:
+    - ALL
+    security_opt:
+    - no-new-privileges:true
+    volumes:
+    - ./config/download-nginx.conf:/etc/nginx/nginx.conf:ro
+    networks:
+    - storage-api
+    - storage
+    - tenant-alpha
+    - tenant-beta
+    depends_on:
+      storage-edge:
+        condition: service_started
+    healthcheck:
+      test:
+      - CMD
+      - wget
+      - -q
+      - -O
+      - /dev/null
+      - http://127.0.0.1:8080/healthz
+      interval: 5s
+      timeout: 3s
+      retries: 20
+  models-alpha-sahara-default:
+    image: ${SPARKROUTE_IMAGE:?Supply a permitted SparkRoute image}
+    user: ${LOCAL_UID}:${LOCAL_GID}
+    command:
+    - catalog
+    - publish
+    - --address
+    - aether-alpha:50051
+    - --server-name
+    - aether-alpha
+    - --implementation
+    - scitrera-management-plane
+    - --specifier
+    - catalog-publisher-sahara-default
+    - --ca
+    - /run/tls/ca.crt
+    - --cert
+    - /run/tls/tls.crt
+    - --key
+    - /run/tls/tls.key
+    - --record
+    - /catalog/sahara-default.json
+    volumes:
+    - ../.local/alpha/tls/management:/run/tls:ro
+    - ../.local/alpha/model-catalog:/catalog:ro
+    networks:
+    - tenant-alpha
+    depends_on:
+      acl-alpha:
+        condition: service_completed_successfully
+    restart: 'no'
+    read_only: true
+    cap_drop:
+    - ALL
+    security_opt:
+    - no-new-privileges:true
+    labels:
+      platform.scitrera.io/lifecycle: job
+  models-alpha-sahara-vision-advanced:
+    image: ${SPARKROUTE_IMAGE:?Supply a permitted SparkRoute image}
+    user: ${LOCAL_UID}:${LOCAL_GID}
+    command:
+    - catalog
+    - publish
+    - --address
+    - aether-alpha:50051
+    - --server-name
+    - aether-alpha
+    - --implementation
+    - scitrera-management-plane
+    - --specifier
+    - catalog-publisher-sahara-vision-advanced
+    - --ca
+    - /run/tls/ca.crt
+    - --cert
+    - /run/tls/tls.crt
+    - --key
+    - /run/tls/tls.key
+    - --record
+    - /catalog/sahara-vision-advanced.json
+    volumes:
+    - ../.local/alpha/tls/management:/run/tls:ro
+    - ../.local/alpha/model-catalog:/catalog:ro
+    networks:
+    - tenant-alpha
+    depends_on:
+      acl-alpha:
+        condition: service_completed_successfully
+    restart: 'no'
+    read_only: true
+    cap_drop:
+    - ALL
+    security_opt:
+    - no-new-privileges:true
+    labels:
+      platform.scitrera.io/lifecycle: job
+  models-alpha-sahara-text-advanced:
+    image: ${SPARKROUTE_IMAGE:?Supply a permitted SparkRoute image}
+    user: ${LOCAL_UID}:${LOCAL_GID}
+    command:
+    - catalog
+    - publish
+    - --address
+    - aether-alpha:50051
+    - --server-name
+    - aether-alpha
+    - --implementation
+    - scitrera-management-plane
+    - --specifier
+    - catalog-publisher-sahara-text-advanced
+    - --ca
+    - /run/tls/ca.crt
+    - --cert
+    - /run/tls/tls.crt
+    - --key
+    - /run/tls/tls.key
+    - --record
+    - /catalog/sahara-text-advanced.json
+    volumes:
+    - ../.local/alpha/tls/management:/run/tls:ro
+    - ../.local/alpha/model-catalog:/catalog:ro
+    networks:
+    - tenant-alpha
+    depends_on:
+      acl-alpha:
+        condition: service_completed_successfully
+    restart: 'no'
+    read_only: true
+    cap_drop:
+    - ALL
+    security_opt:
+    - no-new-privileges:true
+    labels:
+      platform.scitrera.io/lifecycle: job
+  models-beta-sahara-default:
+    image: ${SPARKROUTE_IMAGE:?Supply a permitted SparkRoute image}
+    user: ${LOCAL_UID}:${LOCAL_GID}
+    command:
+    - catalog
+    - publish
+    - --address
+    - aether-beta:50051
+    - --server-name
+    - aether-beta
+    - --implementation
+    - scitrera-management-plane
+    - --specifier
+    - catalog-publisher-sahara-default
+    - --ca
+    - /run/tls/ca.crt
+    - --cert
+    - /run/tls/tls.crt
+    - --key
+    - /run/tls/tls.key
+    - --record
+    - /catalog/sahara-default.json
+    volumes:
+    - ../.local/beta/tls/management:/run/tls:ro
+    - ../.local/beta/model-catalog:/catalog:ro
+    networks:
+    - tenant-beta
+    depends_on:
+      acl-beta:
+        condition: service_completed_successfully
+    restart: 'no'
+    read_only: true
+    cap_drop:
+    - ALL
+    security_opt:
+    - no-new-privileges:true
+    labels:
+      platform.scitrera.io/lifecycle: job
+  models-beta-sahara-vision-advanced:
+    image: ${SPARKROUTE_IMAGE:?Supply a permitted SparkRoute image}
+    user: ${LOCAL_UID}:${LOCAL_GID}
+    command:
+    - catalog
+    - publish
+    - --address
+    - aether-beta:50051
+    - --server-name
+    - aether-beta
+    - --implementation
+    - scitrera-management-plane
+    - --specifier
+    - catalog-publisher-sahara-vision-advanced
+    - --ca
+    - /run/tls/ca.crt
+    - --cert
+    - /run/tls/tls.crt
+    - --key
+    - /run/tls/tls.key
+    - --record
+    - /catalog/sahara-vision-advanced.json
+    volumes:
+    - ../.local/beta/tls/management:/run/tls:ro
+    - ../.local/beta/model-catalog:/catalog:ro
+    networks:
+    - tenant-beta
+    depends_on:
+      acl-beta:
+        condition: service_completed_successfully
+    restart: 'no'
+    read_only: true
+    cap_drop:
+    - ALL
+    security_opt:
+    - no-new-privileges:true
+    labels:
+      platform.scitrera.io/lifecycle: job
+  models-beta-sahara-text-advanced:
+    image: ${SPARKROUTE_IMAGE:?Supply a permitted SparkRoute image}
+    user: ${LOCAL_UID}:${LOCAL_GID}
+    command:
+    - catalog
+    - publish
+    - --address
+    - aether-beta:50051
+    - --server-name
+    - aether-beta
+    - --implementation
+    - scitrera-management-plane
+    - --specifier
+    - catalog-publisher-sahara-text-advanced
+    - --ca
+    - /run/tls/ca.crt
+    - --cert
+    - /run/tls/tls.crt
+    - --key
+    - /run/tls/tls.key
+    - --record
+    - /catalog/sahara-text-advanced.json
+    volumes:
+    - ../.local/beta/tls/management:/run/tls:ro
+    - ../.local/beta/model-catalog:/catalog:ro
+    networks:
+    - tenant-beta
+    depends_on:
+      acl-beta:
+        condition: service_completed_successfully
+    restart: 'no'
+    read_only: true
+    cap_drop:
+    - ALL
+    security_opt:
+    - no-new-privileges:true
+    labels:
+      platform.scitrera.io/lifecycle: job
+  tools-alpha:
+    image: ${TOOLS_IMAGE:?Build the component tool-host image}
+    user: ${LOCAL_UID}:${LOCAL_GID}
+    environment:
+      AETHER_GATEWAY: aether-alpha:50051
+      AETHER_TLS_ENABLED: 'true'
+      AETHER_TLS_CA_CERT: /run/tls/ca.crt
+      AETHER_TLS_CLIENT_CERT: /run/tls/tls.crt
+      AETHER_TLS_CLIENT_KEY: /run/tls/tls.key
+      AETHER_USER_TLS_CLIENT_CERT: /run/user-tls/tls.crt
+      AETHER_USER_TLS_CLIENT_KEY: /run/user-tls/tls.key
+      TOOLS_WSS_AUTH_PROXY_URL: http://aether-alpha:8082
+      TOOLS_WSS_REGISTRY_WORKSPACE: default
+      TOOLS_WSS_ALLOWED_ORIGINS: http://127.0.0.1:${WEB_PORT:-18080}
+      SCITRERA_TOOL_HOST_ACCESS_POLICY: private
+      LOG_LEVEL: info
+      TOOLS_WSS_AUTH_WORKSPACE: default
+    volumes:
+    - ../.local/alpha/tls/tools-wss-client:/run/tls:ro
+    - ../.local/alpha/tls/anonymous:/run/user-tls:ro
+    networks:
+    - tenant-alpha
+    - gateway
+    depends_on:
+      aether-alpha:
+        condition: service_healthy
+    read_only: true
+    cap_drop:
+    - ALL
+    security_opt:
+    - no-new-privileges:true
+    restart: unless-stopped
+  tools-beta:
+    image: ${TOOLS_IMAGE:?Build the component tool-host image}
+    user: ${LOCAL_UID}:${LOCAL_GID}
+    environment:
+      AETHER_GATEWAY: aether-beta:50051
+      AETHER_TLS_ENABLED: 'true'
+      AETHER_TLS_CA_CERT: /run/tls/ca.crt
+      AETHER_TLS_CLIENT_CERT: /run/tls/tls.crt
+      AETHER_TLS_CLIENT_KEY: /run/tls/tls.key
+      AETHER_USER_TLS_CLIENT_CERT: /run/user-tls/tls.crt
+      AETHER_USER_TLS_CLIENT_KEY: /run/user-tls/tls.key
+      TOOLS_WSS_AUTH_PROXY_URL: http://aether-beta:8082
+      TOOLS_WSS_REGISTRY_WORKSPACE: default
+      TOOLS_WSS_ALLOWED_ORIGINS: http://127.0.0.1:${WEB_PORT:-18080}
+      SCITRERA_TOOL_HOST_ACCESS_POLICY: private
+      LOG_LEVEL: info
+      TOOLS_WSS_AUTH_WORKSPACE: default
+    volumes:
+    - ../.local/beta/tls/tools-wss-client:/run/tls:ro
+    - ../.local/beta/tls/anonymous:/run/user-tls:ro
+    networks:
+    - tenant-beta
+    - gateway
+    depends_on:
+      aether-beta:
+        condition: service_healthy
+    read_only: true
+    cap_drop:
+    - ALL
+    security_opt:
+    - no-new-privileges:true
+    restart: unless-stopped
+volumes:
+  mt-data: {}
+  sessions: {}
+  aether-alpha: {}
+  aether-beta: {}
+  storage-postgres: {}
+  objects: {}
+  ml-postgres-alpha: {}
+  dc-postgres-alpha: {}
+  ml-postgres-beta: {}
+  dc-postgres-beta: {}
+  sparkroute-postgres: {}
+  memorylayer-data-alpha: {}
+  memorylayer-data-beta: {}
+networks:
+  identity:
+    internal: true
+  gateway: {}
+  tenant-alpha:
+    name: ${COMPOSE_PROJECT_NAME}_tenant-alpha
+  tenant-beta:
+    name: ${COMPOSE_PROJECT_NAME}_tenant-beta
+  storage:
+    internal: true
+  storage-api:
+    internal: true
+  model-state:
+    internal: true

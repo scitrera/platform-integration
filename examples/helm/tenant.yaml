@@ -1,0 +1,24 @@
+# Replace placeholders with operator-selected artifacts and existing Secret references.
+development: false
+phase: 0
+bootstrapRevision: '1'
+images:
+  backend: registry.example.invalid/backend:REPLACE@sha256:REPLACE
+  aether: registry.example.invalid/aether:REPLACE@sha256:REPLACE
+  memorylayer: registry.example.invalid/memorylayer:REPLACE@sha256:REPLACE
+  connectors: registry.example.invalid/connectors:REPLACE@sha256:REPLACE
+  provider: registry.example.invalid/provider:REPLACE@sha256:REPLACE
+  sahara: registry.example.invalid/sahara:REPLACE@sha256:REPLACE
+  sidecar: registry.example.invalid/sidecar:REPLACE@sha256:REPLACE
+  code: registry.example.invalid/code:REPLACE@sha256:REPLACE
+  mlPostgres: registry.example.invalid/mlPostgres:REPLACE@sha256:REPLACE
+  postgres: registry.example.invalid/postgres:REPLACE@sha256:REPLACE
+  skills: registry.example.invalid/skills:REPLACE@sha256:REPLACE
+  sparkroute: registry.example.invalid/sparkroute:REPLACE@sha256:REPLACE
+  tools: registry.example.invalid/tools:REPLACE@sha256:REPLACE
+storage:
+  className: REPLACE
+  size: 10Gi
+tenant: example
+adminEmail: admin@example.test
+seedDevelopmentAdmin: false

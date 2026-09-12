@@ -1,0 +1,171 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "bootstrapRevision": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9-]{0,30}$"
+    },
+    "phase": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 4
+    },
+    "development": {
+      "type": "boolean"
+    },
+    "images": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "secrets": {
+      "type": "object"
+    },
+    "resources": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "requests": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "limits": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    },
+    "storage": {
+      "type": "object",
+      "required": [
+        "size",
+        "className"
+      ],
+      "properties": {
+        "size": {
+          "type": "string",
+          "pattern": "^[1-9][0-9]*(Gi|Ti)$"
+        },
+        "className": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "databaseInstances": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 3
+    },
+    "tenantNamespaces": {
+      "type": "array"
+    },
+    "sharedNamespace": {
+      "type": "string",
+      "minLength": 1
+    },
+    "databaseResources": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "requests": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "limits": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    },
+    "roleResources": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "requests": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "limits": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        }
+      }
+    },
+    "uploadProxy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "enabled",
+        "endpoint",
+        "signedHost"
+      ],
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "endpoint": {
+          "type": "string",
+          "pattern": "^$|^https?://[A-Za-z0-9.-]+(:[0-9]{1,5})?$"
+        },
+        "signedHost": {
+          "type": "string",
+          "pattern": "^$|^[A-Za-z0-9.-]+(:[0-9]{1,5})?$"
+        }
+      },
+      "if": {
+        "properties": {
+          "enabled": {
+            "const": true
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "endpoint": {
+            "minLength": 1
+          },
+          "signedHost": {
+            "minLength": 1
+          }
+        }
+      }
+    }
+  },
+  "required": [
+    "phase",
+    "development",
+    "bootstrapRevision",
+    "databaseInstances",
+    "storage",
+    "resources",
+    "tenantNamespaces",
+    "images",
+    "secrets"
+  ]
+}

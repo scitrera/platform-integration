@@ -1,0 +1,150 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+{{- if ge (int .Values.phase) 1 }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: '{{ .Release.Name }}-download'
+  labels: &id001
+    app.kubernetes.io/instance: '{{ .Release.Name }}'
+    app.kubernetes.io/component: download
+    platform.scitrera.io/trust: service
+spec:
+  replicas: 1
+  selector:
+    matchLabels: *id001
+  template:
+    metadata:
+      labels: *id001
+      annotations:
+        checksum/config: '{{ include (print $.Template.BasePath "/download-config.yaml") . | sha256sum }}'
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+      - name: download
+        image: '{{ required "images.web is required" .Values.images.web }}'
+        command:
+        - nginx
+        - -g
+        - daemon off;
+        ports:
+        - name: http
+          containerPort: 8080
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop:
+            - ALL
+        resources:
+          requests:
+            cpu: 50m
+            memory: 32Mi
+          limits:
+            cpu: 500m
+            memory: 128Mi
+        volumeMounts:
+        - name: config
+          mountPath: /etc/nginx/nginx.conf
+          subPath: nginx.conf
+          readOnly: true
+        - name: tmp
+          mountPath: /tmp
+        readinessProbe:
+          httpGet:
+            path: /healthz
+            port: 8080
+          periodSeconds: 5
+        livenessProbe:
+          httpGet:
+            path: /healthz
+            port: 8080
+          periodSeconds: 15
+      volumes:
+      - name: config
+        configMap:
+          name: '{{ .Release.Name }}-download'
+      - name: tmp
+        emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: '{{ .Release.Name }}-download'
+spec:
+  selector:
+    app.kubernetes.io/instance: '{{ .Release.Name }}'
+    app.kubernetes.io/component: download
+    platform.scitrera.io/trust: service
+  ports:
+  - name: http
+    port: 8080
+    targetPort: 8080
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: '{{ .Release.Name }}-download'
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/component: download
+  policyTypes:
+  - Ingress
+  - Egress
+  ingress:
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          platform.scitrera.io/tenant: 'true'
+      podSelector:
+        matchLabels:
+          app.kubernetes.io/component: memorylayer
+    - namespaceSelector:
+        matchLabels:
+          platform.scitrera.io/tenant: 'true'
+      podSelector:
+        matchLabels:
+          app.kubernetes.io/managed-by: scitrera-sandbox
+    ports:
+    - protocol: TCP
+      port: 8080
+  egress:
+  - to:
+    - podSelector:
+        matchLabels:
+          app.kubernetes.io/component: edge
+    ports:
+    - protocol: TCP
+      port: 8090
+{{- if .Values.uploadProxy.enabled }}
+  - ports:
+    - protocol: TCP
+      port: {{ (regexFind ":[0-9]+$" .Values.uploadProxy.endpoint | trimPrefix ":") | default (ternary "443" "80" (hasPrefix "https://" .Values.uploadProxy.endpoint)) | int }}
+{{- end }}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: '{{ .Release.Name }}-download-edge'
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/component: edge
+  policyTypes:
+  - Ingress
+  ingress:
+  - from:
+    - podSelector:
+        matchLabels:
+          app.kubernetes.io/component: download
+    ports:
+    - protocol: TCP
+      port: 8090
+{{- end }}

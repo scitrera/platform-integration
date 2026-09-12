@@ -1,0 +1,83 @@
+services:
+  idp:
+    image: ${BACKEND_IMAGE:?Run build.py}
+    command:
+    - python
+    - /fixtures/oidc.py
+    volumes:
+    - ../tests/fixtures:/fixtures:ro
+    env_file:
+    - ../.local/fixture.env
+    environment:
+      FIXTURE_ISSUER: http://idp:8080
+      FIXTURE_PUBLIC_ORIGIN: http://127.0.0.1:${FIXTURE_IDP_PORT:-18090}
+      FIXTURE_CALLBACK: http://127.0.0.1:${WEB_PORT:-18080}/api/auth/auth/callback/fixture
+      FIXTURE_CLIENT_ID: platform-integration-fixture
+    ports:
+    - 127.0.0.1:${FIXTURE_IDP_PORT:-18090}:8080
+    networks:
+    - gateway
+    healthcheck:
+      test:
+      - CMD
+      - python
+      - -c
+      - import urllib.request; urllib.request.urlopen('http://localhost:8080/healthz',
+        timeout=2)
+      interval: 3s
+      timeout: 3s
+      retries: 20
+  auth:
+    depends_on:
+      idp:
+        condition: service_healthy
+  inference:
+    image: ${BACKEND_IMAGE}
+    command:
+    - python
+    - /fixtures/inference.py
+    volumes:
+    - ../tests/fixtures:/fixtures:ro
+    networks:
+    - tenant-alpha
+    - tenant-beta
+  catalog-alpha:
+    environment:
+      SEED_DEV_ADMIN: 'true'
+  memorylayer-alpha:
+    environment:
+      MEMORYLAYER_EMBEDDING_SERVICE: default
+      MEMORYLAYER_DOCUMENT_TRANSCRIBE_ENABLED: 'true'
+      MEMORYLAYER_TRANSCRIPTION_SERVICE: direct
+      MEMORYLAYER_TRANSCRIBE_CASCADE: fixture
+      MEMORYLAYER_TRANSCRIBE_PROFILE_FIXTURE_URL: http://gateway:8080/v1
+      MEMORYLAYER_TRANSCRIBE_PROFILE_FIXTURE_MODEL: memorylayer-default
+      MEMORYLAYER_TRANSCRIBE_PROFILE_FIXTURE_CONTRACT: generic_markdown
+      MEMORYLAYER_TRANSCRIBE_PROFILE_FIXTURE_AUTH: bearer
+      MEMORYLAYER_TRANSCRIBE_FIGURE_CAPTIONS: 'false'
+    depends_on:
+      inference:
+        condition: service_started
+  catalog-beta:
+    environment:
+      SEED_DEV_ADMIN: 'true'
+  memorylayer-beta:
+    environment:
+      MEMORYLAYER_EMBEDDING_SERVICE: default
+      MEMORYLAYER_DOCUMENT_TRANSCRIBE_ENABLED: 'true'
+      MEMORYLAYER_TRANSCRIPTION_SERVICE: direct
+      MEMORYLAYER_TRANSCRIBE_CASCADE: fixture
+      MEMORYLAYER_TRANSCRIBE_PROFILE_FIXTURE_URL: http://gateway:8080/v1
+      MEMORYLAYER_TRANSCRIBE_PROFILE_FIXTURE_MODEL: memorylayer-default
+      MEMORYLAYER_TRANSCRIBE_PROFILE_FIXTURE_CONTRACT: generic_markdown
+      MEMORYLAYER_TRANSCRIBE_PROFILE_FIXTURE_AUTH: bearer
+      MEMORYLAYER_TRANSCRIBE_FIGURE_CAPTIONS: 'false'
+    depends_on:
+      inference:
+        condition: service_started
+  acl-alpha:
+    environment:
+      ACL_SERVICE_GRANTS: '[{"principal_id":"sv::tools-wss-client::*","resource_type":"capability","resource_id":"capability/exchange_authority_grants/_no_workspace/alice@example.test","access_level":30},{"principal_id":"sv::tools-wss-client::*","resource_type":"service_impl","resource_id":"platform-bridge","access_level":20}]'
+  acl-beta:
+    environment:
+      ACL_SERVICE_GRANTS: '[{"principal_id":"sv::tools-wss-client::*","resource_type":"capability","resource_id":"capability/exchange_authority_grants/_no_workspace/bob@example.test","access_level":30},{"principal_id":"sv::tools-wss-client::*","resource_type":"service_impl","resource_id":"platform-bridge","access_level":20}]'

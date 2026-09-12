@@ -1,0 +1,154 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+{{- if ge (int .Values.phase) 2 }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Release.Name }}-auth
+  labels:
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/component: auth
+    platform.scitrera.io/trust: service
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/instance: {{ .Release.Name }}
+      app.kubernetes.io/component: auth
+      platform.scitrera.io/trust: service
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/instance: {{ .Release.Name }}
+        app.kubernetes.io/component: auth
+        platform.scitrera.io/trust: service
+    spec:
+      serviceAccountName: {{ .Release.Name }}-runtime
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
+      terminationGracePeriodSeconds: 30
+      initContainers:
+      - name: private-files
+        image: {{ required "images.web is required" .Values.images.web | quote }}
+        command: ["/bin/sh", "-ec"]
+        args:
+        - mkdir -p /output/private; chmod 700 /output/private; cp /input/* /output/private/; chmod 400 /output/private/*
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop: [ALL]
+        volumeMounts:
+        - name: operators-source
+          mountPath: /input
+          readOnly: true
+        - name: operators
+          mountPath: /output
+      containers:
+      - name: auth
+        image: {{ required "images.auth is required" .Values.images.auth | quote }}
+        imagePullPolicy: IfNotPresent
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop:
+            - ALL
+        resources:
+{{ toYaml (index .Values.roleResources "auth" | default .Values.resources) | indent 10 }}
+        env:
+        - name: AUTH_PROXY_MODE
+          value: verify
+        - name: AUTH_PROXY_LISTEN_ADDR
+          value: :8080
+        - name: AUTH_PROXY_REDIS_ADDR
+          value: {{ .Release.Name }}-sessions:6379
+        - name: AUTH_PROXY_SESSION_STORE
+          value: redis
+        - name: AUTH_PROXY_SESSION_REDIS_ADDR
+          value: {{ .Release.Name }}-sessions:6379
+        - name: SCITRERA_AUTH_EXTERNAL_ADDR
+          value: :8081
+        - name: SCITRERA_AUTH_ADMIN_ADDR
+          value: :8082
+        - name: SCITRERA_AUTH_ADMIN_ORIGIN
+          value: {{ .Values.adminOrigin | quote }}
+        - name: SCITRERA_AUTH_ADMIN_TOKEN_FILE
+          value: /run/auth/operators.json
+        - name: SCITRERA_AUTH_POST_LOGIN_TARGET
+          value: {{ .Values.publicOrigin | quote }}
+        - name: SCITRERA_AUTH_ALLOWED_REDIRECT_HOSTS
+          value: {{ .Values.hostname | quote }}
+        - name: SCITRERA_AUTH_CHECKZ_ALLOWED_ORIGINS
+          value: {{ .Values.publicOrigin | quote }}
+        - name: AUTH_PROXY_SESSION_COOKIE_SECURE
+          value: {{ (not .Values.development) | toString | quote }}
+        volumeMounts:
+        - name: tmp
+          mountPath: /tmp
+        - name: operators
+          mountPath: /run/auth
+          subPath: private
+          readOnly: true
+        envFrom:
+        - secretRef:
+            name: {{ index .Values.secrets "auth" | quote }}
+        - secretRef:
+            name: {{ index .Values.secrets "oauth" | quote }}
+        readinessProbe:
+          tcpSocket: &id001
+            port: 8081
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 6
+        startupProbe:
+          tcpSocket: *id001
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 60
+        livenessProbe:
+          tcpSocket: *id001
+          periodSeconds: 15
+          timeoutSeconds: 3
+          failureThreshold: 6
+      volumes:
+      - name: tmp
+        emptyDir: {}
+      - name: operators
+        emptyDir:
+          medium: Memory
+      - name: operators-source
+        secret:
+          secretName: {{ .Values.secrets.operators | quote }}
+{{- end }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .Release.Name }}-auth
+  labels:
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/component: auth
+    platform.scitrera.io/trust: service
+spec:
+  selector:
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/component: auth
+    platform.scitrera.io/trust: service
+  ports:
+  - name: verify
+    port: 8080
+    targetPort: 8080
+  - name: external
+    port: 8081
+    targetPort: 8081
+  - name: operator
+    port: 8082
+    targetPort: 8082
