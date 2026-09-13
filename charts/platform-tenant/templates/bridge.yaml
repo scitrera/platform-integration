@@ -19,6 +19,8 @@ spec:
       platform.scitrera.io/trust: service
   template:
     metadata:
+      annotations:
+        checksum/work-profiles: {{ .Values.workProfiles | toJson | sha256sum }}
       labels:
         app.kubernetes.io/instance: {{ .Release.Name }}
         app.kubernetes.io/component: bridge
@@ -47,6 +49,14 @@ spec:
         resources:
 {{ toYaml (index .Values.roleResources "bridge" | default .Values.resources) | indent 10 }}
         env:
+        - name: LLM_GATEWAY_AUTH_MODE
+          value: bearer
+        - name: LLM_GATEWAY_BASE_URL
+          value: http://shared-gateway.{{ .Values.sharedNamespace }}.svc:8080/v1
+        - name: LLM_GATEWAY_BEARER_TOKEN_FILE
+          value: /run/gateway/token
+        - name: SCITRERA_WORK_PROFILES_FILE
+          value: /run/work-profiles/profiles.json
         - name: STATEFUL_ROOT
           value: /tmp/state
         - name: XDG_CONFIG_HOME
@@ -74,6 +84,12 @@ spec:
         - name: PLATFORM_BRIDGE_SEMANTIC_TOOL_SEARCH
           value: 'false'
         volumeMounts:
+        - name: gateway-token
+          mountPath: /run/gateway
+          readOnly: true
+        - name: work-profiles
+          mountPath: /run/work-profiles
+          readOnly: true
         - name: tmp
           mountPath: /tmp
         - name: tls
@@ -84,6 +100,12 @@ spec:
         - -m
         - x_platform_bridge
       volumes:
+      - name: gateway-token
+        secret:
+          secretName: {{ .Values.secrets.gatewayToken | quote }}
+      - name: work-profiles
+        configMap:
+          name: {{ .Release.Name }}-work-profiles
       - name: tmp
         emptyDir: {}
       - name: tls

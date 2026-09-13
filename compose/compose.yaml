@@ -208,10 +208,12 @@ services:
       LLM_GATEWAY_BEARER_TOKEN_FILE: /run/gateway/token
       SANDBOX_BLOB_FETCH_BASE_URL: http://storage-download:8080
       SANDBOX_BLOB_UPLOAD_BASE_URL: http://storage-download:8080/uploads
+      SCITRERA_WORK_PROFILES_FILE: /run/work-profiles.json
     volumes:
     - ../.local/alpha/tls/platform-server:/run/tls:ro
     - ../.local/alpha/tls/anonymous:/run/anonymous:ro
     - ../.local/alpha/gateway-token:/run/gateway/token:ro
+    - ${WORK_PROFILES_FILE:-./config/work-profiles.json}:/run/work-profiles.json:ro
     networks:
     - tenant-alpha
     - gateway
@@ -316,10 +318,12 @@ services:
       LLM_GATEWAY_BEARER_TOKEN_FILE: /run/gateway/token
       SANDBOX_BLOB_FETCH_BASE_URL: http://storage-download:8080
       SANDBOX_BLOB_UPLOAD_BASE_URL: http://storage-download:8080/uploads
+      SCITRERA_WORK_PROFILES_FILE: /run/work-profiles.json
     volumes:
     - ../.local/beta/tls/platform-server:/run/tls:ro
     - ../.local/beta/tls/anonymous:/run/anonymous:ro
     - ../.local/beta/gateway-token:/run/gateway/token:ro
+    - ${WORK_PROFILES_FILE:-./config/work-profiles.json}:/run/work-profiles.json:ro
     networks:
     - tenant-beta
     - gateway
@@ -746,8 +750,14 @@ services:
       AETHER_MAX_RECONNECT_ATTEMPTS: '0'
       AETHER_GATEWAY_ADDR: aether-alpha:50051
       PLATFORM_BRIDGE_SEMANTIC_TOOL_SEARCH: 'false'
+      SCITRERA_WORK_PROFILES_FILE: /run/work-profiles.json
+      LLM_GATEWAY_AUTH_MODE: bearer
+      LLM_GATEWAY_BASE_URL: http://llm-gateway.mt:8080/v1
+      LLM_GATEWAY_BEARER_TOKEN_FILE: /run/gateway/token
     volumes:
     - ../.local/alpha/tls/platform-bridge:/run/tls:ro
+    - ${WORK_PROFILES_FILE:-./config/work-profiles.json}:/run/work-profiles.json:ro
+    - ../.local/alpha/gateway-token:/run/gateway/token:ro
     networks:
     - tenant-alpha
     depends_on:
@@ -808,11 +818,14 @@ services:
       SANDBOX_SIDECAR_TLS_CA_CERT: /run/anonymous/ca.crt
       SANDBOX_SIDECAR_TLS_CLIENT_CERT: /run/anonymous/tls.crt
       SANDBOX_SIDECAR_TLS_CLIENT_KEY: /run/anonymous/tls.key
+      SCITRERA_WORK_PROFILES_FILE: /run/work-profiles.json
+      SANDBOX_DOCKER_SUBNET_POOL: ${SANDBOX_DOCKER_SUBNET_POOL:-}
     volumes:
     - /var/run/docker.sock:/var/run/docker.sock
     - ${SANDBOX_HOST_ROOT}:${SANDBOX_HOST_ROOT}
     - ../.local/alpha/tls/sandbox-provider:/run/tls:ro
     - ../.local/alpha/tls/anonymous:/run/anonymous:ro
+    - ${WORK_PROFILES_FILE:-./config/work-profiles.json}:/run/work-profiles.json:ro
     networks:
     - tenant-alpha
     depends_on:
@@ -1062,8 +1075,14 @@ services:
       AETHER_MAX_RECONNECT_ATTEMPTS: '0'
       AETHER_GATEWAY_ADDR: aether-beta:50051
       PLATFORM_BRIDGE_SEMANTIC_TOOL_SEARCH: 'false'
+      SCITRERA_WORK_PROFILES_FILE: /run/work-profiles.json
+      LLM_GATEWAY_AUTH_MODE: bearer
+      LLM_GATEWAY_BASE_URL: http://llm-gateway.mt:8080/v1
+      LLM_GATEWAY_BEARER_TOKEN_FILE: /run/gateway/token
     volumes:
     - ../.local/beta/tls/platform-bridge:/run/tls:ro
+    - ${WORK_PROFILES_FILE:-./config/work-profiles.json}:/run/work-profiles.json:ro
+    - ../.local/beta/gateway-token:/run/gateway/token:ro
     networks:
     - tenant-beta
     depends_on:
@@ -1124,11 +1143,14 @@ services:
       SANDBOX_SIDECAR_TLS_CA_CERT: /run/anonymous/ca.crt
       SANDBOX_SIDECAR_TLS_CLIENT_CERT: /run/anonymous/tls.crt
       SANDBOX_SIDECAR_TLS_CLIENT_KEY: /run/anonymous/tls.key
+      SCITRERA_WORK_PROFILES_FILE: /run/work-profiles.json
+      SANDBOX_DOCKER_SUBNET_POOL: ${SANDBOX_DOCKER_SUBNET_POOL:-}
     volumes:
     - /var/run/docker.sock:/var/run/docker.sock
     - ${SANDBOX_HOST_ROOT}:${SANDBOX_HOST_ROOT}
     - ../.local/beta/tls/sandbox-provider:/run/tls:ro
     - ../.local/beta/tls/anonymous:/run/anonymous:ro
+    - ${WORK_PROFILES_FILE:-./config/work-profiles.json}:/run/work-profiles.json:ro
     networks:
     - tenant-beta
     depends_on:

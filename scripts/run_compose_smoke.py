@@ -17,6 +17,7 @@ def main():
     parser.add_argument("--images", type=Path, required=True, help="Private images.json created by the reviewed builder")
     parser.add_argument("--directory", type=Path, required=True, help="An unused directory for this installation")
     parser.add_argument("--base-port", type=int, default=18100)
+    parser.add_argument("--work-profiles", action="store_true", help="Enable per-conversation shared-worker fixture acceptance")
     args = parser.parse_args()
     if not 1024 <= args.base_port <= 65525:
         parser.error("Base port and its +2/+10 offsets must be unprivileged valid ports")
@@ -27,7 +28,7 @@ def main():
             parser.error("Local image bytes differ from the selected record: " + name)
     root = args.directory.resolve()
     root.mkdir(parents=True, exist_ok=False, mode=0o700)
-    for name in ("scripts", "compose", "examples", "tests", "charts", "docs", "patches", "LICENSES", "images"):
+    for name in ("scripts", "compose", "examples", "tests", "charts", "docs", "LICENSES", "images"):
         shutil.copytree(ROOT / name, root / name, ignore=shutil.ignore_patterns("__pycache__", "node_modules"))
     for name in ("package.json", "package-lock.json", "playwright.config.ts", "requirements-dev.txt", "LICENSE", "NOTICE", "README.md", "versions.yaml", "THIRD_PARTY_NOTICES.md"):
         shutil.copy2(ROOT / name, root / name)
@@ -48,11 +49,20 @@ def main():
         print("Completed smoke step", step, flush=True)
     run(["python3", "scripts/configure.py", "--project", project, "--web-port", str(args.base_port),
          "--admin-port", str(args.base_port + 2), "--fixture-idp-port", str(args.base_port + 10)])
+    if args.work_profiles:
+        with (local / "compose.env").open("a") as config:
+            config.write("\nWORK_PROFILES_FILE=" + str(root / "tests/fixtures/work-profiles.json") + "\n")
     run(["python3", "scripts/dev.py", "up", "--fixtures"])
+    if args.work_profiles:
+        run(["python3", "tests/integration/work_profile_ui.py", "--project", project, "--enabled", "true"])
     run(["npm", "ci"])
     run(["npx", "playwright", "install", "chromium"])
     environment = {key: value for key, value in os.environ.items()
-                   if not key.startswith(("PLATFORM_", "PERSISTENCE_", "FIXTURE_IDP_", "AUTH_OPERATOR", "WORKER_", "GATEWAY_USAGE_", "FIXTURE_SESSION_"))}
+                   if not key.startswith(("PLATFORM_", "PERSISTENCE_", "FIXTURE_IDP_", "AUTH_OPERATOR", "WORKER_", "GATEWAY_USAGE_", "FIXTURE_SESSION_", "WORK_PROFILE_"))}
+    if args.work_profiles:
+        environment["WORK_PROFILE_ACCEPTANCE"] = "1"
+        environment["WORK_PROFILE_RECORD"] = str(local / "work-profile-acceptance.json")
+        environment["WORK_PROFILE_PROJECT"] = project
     environment["PLATFORM_ORIGIN"] = "http://127.0.0.1:" + str(args.base_port)
     environment["FIXTURE_IDP_ORIGIN"] = "http://127.0.0.1:" + str(args.base_port + 10)
     environment["AUTH_OPERATOR_ORIGIN"] = "http://127.0.0.1:" + str(args.base_port + 2)
@@ -62,6 +72,9 @@ def main():
     run(["npm", "run", "test:browser"], env=environment)
     run(["python3", "scripts/check_gateway.py", "--profile", "compose", "--project", project,
          "--usage-only", "--usage-record", str(local / "gateway-usage.json")])
+    if args.work_profiles:
+        run(["python3", "scripts/check_work_profiles.py", "--project", project,
+             "--record", str(local / "work-profile-acceptance.json")])
     run(["python3", "scripts/dev.py", "up", "--fixtures"])
     environment.pop("PERSISTENCE_RECORD")
     environment["PERSISTENCE_CHECK"] = str(local / "persistence.json")

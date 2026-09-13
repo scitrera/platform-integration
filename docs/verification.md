@@ -1,9 +1,12 @@
 # Verification status
 
-The local reference profiles passed installed acceptance on Linux arm64.
-External OAuth exchanges, real model-provider calls and anonymous artifact
-availability remain pending. This is a locally reviewable candidate, not a
-published production release.
+The reference profiles below passed installed acceptance on Linux arm64.
+The current source selection uses component commits; see [upstream ownership](upstream.md).
+Its Compose acceptance and build status are recorded in versions.yaml. Kubernetes
+installation results below apply to the earlier image baseline; this source update
+reruns Helm rendering and configuration checks only. External OAuth, real
+model-provider calls, backend/frontend source publication and image registry
+availability remain pending.
 
 | Capability | Docker Compose | Helm on disposable Kind |
 | --- | --- | --- |
@@ -76,13 +79,12 @@ The Kubernetes drill verifies independent restored database/file contents and
 resumes the original services; restored-state traffic promotion remains untested.
 Database rollback, cross-version restoration, live backup and PITR are not claimed.
 
-Local source builds include bounded fixes in their owning repositories. The
-compatibility manifest records 18 runtime/build images plus the sidecar's distinct
-Aether build base, 14 verified source snapshots and the matching web source
-archive. All 14 source snapshots were reconstructed from their recorded base revisions
-and exported patches, with exact file sets and content hashes verified. Local Docker image IDs are not registry manifest digests. The
-permitted SparkRoute enterprise build excludes its source from this repository
-and does not imply permission to redistribute its image.
+The current compatibility manifest records 19 local runtime/build images from
+six clean component source revisions, with dependency image IDs and the matching
+web source archive. Component changes are maintained upstream; the installation
+does not apply patch snapshots. Local Docker image IDs are not registry manifest
+digests. The permitted SparkRoute enterprise build excludes its source from this
+repository and does not imply permission to redistribute its image.
 
 A fresh directory populated only from the reviewed 147-file export passed all
 eight smoke steps: independent configuration, complete installation, browser
@@ -92,5 +94,5 @@ The smoke consumed only the exported installation and explicitly supplied local
 image records. No private monorepo or incidental runtime configuration was copied.
 
 See acceptance.md for reproducible fixture commands and operations.md for the
-tested recovery procedures. Public publication and deployment to existing
-environments were not performed.
+tested recovery procedures. Upstream code review status is recorded in upstream.md. Registry publication and
+production deployment were not performed.

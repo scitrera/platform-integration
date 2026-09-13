@@ -19,6 +19,8 @@ spec:
       platform.scitrera.io/trust: service
   template:
     metadata:
+      annotations:
+        checksum/work-profiles: {{ .Values.workProfiles | toJson | sha256sum }}
       labels:
         app.kubernetes.io/instance: {{ .Release.Name }}
         app.kubernetes.io/component: provider
@@ -47,6 +49,8 @@ spec:
         resources:
 {{ toYaml (index .Values.roleResources "provider" | default .Values.resources) | indent 10 }}
         env:
+        - name: SCITRERA_WORK_PROFILES_FILE
+          value: /run/work-profiles/profiles.json
         - name: AETHER_GATEWAY
           value: {{ .Release.Name }}-aether:50051
         - name: AETHER_AUTH
@@ -96,6 +100,9 @@ spec:
         - name: SANDBOX_DATA_DIR
           value: /data/workspaces
         volumeMounts:
+        - name: work-profiles
+          mountPath: /run/work-profiles
+          readOnly: true
         - name: anonymous
           mountPath: /run/anonymous
           readOnly: true
@@ -110,6 +117,9 @@ spec:
         - secretRef:
             name: {{ index .Values.secrets "provider" | quote }}
       volumes:
+      - name: work-profiles
+        configMap:
+          name: {{ .Release.Name }}-work-profiles
       - name: anonymous
         secret:
           secretName: {{ index .Values.secrets.tls "anonymous" | quote }}

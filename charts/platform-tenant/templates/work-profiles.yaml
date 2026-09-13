@@ -1,0 +1,9 @@
+{{- if ge (int .Values.phase) 4 }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ .Release.Name }}-work-profiles
+data:
+  profiles.json: |
+    {{ dict "profiles" .Values.workProfiles.profiles "tenants" (dict .Values.tenant (dict "allowed_profiles" .Values.workProfiles.allowedProfiles)) | toJson }}
+{{- end }}

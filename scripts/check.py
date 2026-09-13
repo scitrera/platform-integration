@@ -4,7 +4,7 @@
 import ast
 import copy
 import json
-import hashlib
+import re
 from pathlib import Path
 import subprocess
 import tempfile
@@ -16,9 +16,11 @@ ROOT = Path(__file__).resolve().parents[1]
 def main():
     manifest = yaml.safe_load((ROOT / "versions.yaml").read_text())
     for name, source in manifest["source_sets"].items():
-        patch = source.get("patch")
-        if patch:
-            assert hashlib.sha256((ROOT / patch).read_bytes()).hexdigest() == source["patch_sha256"], name
+        assert re.fullmatch(r"[0-9a-f]{40}", source["revision"]), name
+        assert re.fullmatch(r"[0-9a-f]{64}", source["tracked_content_sha256"]), name
+        assert source["dirty"] is False and not source.get("include_untracked"), name
+        assert not source.get("patch"), "Compatibility sources must use component commits"
+    assert not list((ROOT / "patches").glob("*.patch")), "Implementation patches belong upstream"
     for name, artifact in manifest["images"].items():
         assert artifact["local_image_id"].startswith("sha256:") and len(artifact["local_image_id"]) == 71, name
         if artifact.get("source_set"):
@@ -46,6 +48,8 @@ def main():
         if kind == "shared":
             values["modelCatalog"]["allowedProviderHosts"] = ["provider.example.test"]
             values["modelCatalog"]["credentialSecretNames"] = ["catalog-example"]
+        if kind == "tenant":
+            values["workProfiles"] = {"profiles": {"document-review": {"instructions": "Synthetic profile", "max_concurrent_turns": 4}}, "allowedProfiles": ["document-review"]}
         with tempfile.TemporaryDirectory(prefix="platform-render-") as temp:
             path = Path(temp) / "values.yaml"
             path.write_text(yaml.safe_dump(values))
@@ -68,6 +72,15 @@ def main():
                     if kind == "storage" and obj["kind"] == "ConfigMap" and obj["metadata"]["name"] == "example-download":
                         conf = obj["data"]["nginx.conf"]
                         assert "limit_except PUT" in conf and "$request_uri $artifact_upload_path" in conf
+                    if kind == "tenant" and obj["kind"] == "ConfigMap" and obj["metadata"]["name"] == "example-work-profiles":
+                        registry = json.loads(obj["data"]["profiles.json"])
+                        assert registry["profiles"] == values["workProfiles"]["profiles"]
+                        assert registry["tenants"][values["tenant"]]["allowed_profiles"] == ["document-review"]
+                    if kind == "tenant" and obj["kind"] == "Deployment" and obj["metadata"]["name"] in ("example-platform", "example-bridge", "example-provider"):
+                        template = obj["spec"]["template"]
+                        assert template["metadata"]["annotations"]["checksum/work-profiles"]
+                        container = template["spec"]["containers"][0]
+                        assert {"name": "SCITRERA_WORK_PROFILES_FILE", "value": "/run/work-profiles/profiles.json"} in container["env"]
                     if obj["kind"] == "Job":
                         assert obj["spec"]["activeDeadlineSeconds"] <= 600
                         assert obj["spec"]["template"]["spec"]["restartPolicy"] == "Never"

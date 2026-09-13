@@ -1,0 +1,21 @@
+{
+  "profiles": {
+    "document-review": {
+      "instructions": "fixture-document-review-profile: Review documents with authorized delegated application tools.",
+      "max_concurrent_turns": 4,
+      "idle_timeout_seconds": 3600
+    },
+    "draft": {
+      "instructions": "Draft documents.",
+      "max_concurrent_turns": 2
+    }
+  },
+  "tenants": {
+    "alpha": {
+      "allowed_profiles": [
+        "document-review",
+        "draft"
+      ]
+    }
+  }
+}

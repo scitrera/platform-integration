@@ -267,6 +267,25 @@
     "blobUploadBaseURL": {
       "type": "string",
       "pattern": "^$|^https?://[^?#]+$"
+    },
+    "workProfiles": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "profiles": {
+          "type": "object"
+        },
+        "allowedProfiles": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "required": [
+        "profiles",
+        "allowedProfiles"
+      ]
     }
   },
   "required": [

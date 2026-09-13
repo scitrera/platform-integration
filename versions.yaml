@@ -6,8 +6,9 @@ profiles:
 external_acceptance:
   oauth: pending per operator instruction
   real_model_provider: pending per operator instruction
-availability_note: Local image IDs identify engine content, not registry manifest
-  digests. Selected source revisions require availability verification.
+availability_note: Upstream dependency commits are anonymously retrievable; backend/frontend
+  commits remain local candidates. Image IDs identify local engine content; registry
+  publication remains pending.
 charts:
   platform-shared:
     version: 0.1.0
@@ -26,104 +27,119 @@ charts:
     dependencies: []
 prerequisites_lock: tests/fixtures/prerequisites.lock.json
 ci_tools_lock: tests/fixtures/ci-tools.lock.json
+source_selection: component-commits
+verification_scope:
+  compose: 'passed: shared two-user worker, 17 personal browser scenarios, both gateway
+    ledgers, repeated bootstrap, persistence and chooser visibility; selected image
+    IDs verified on dynamic containers'
+  helm: all chart phases, profile configuration and digest-refusal checks passed;
+    new Kubernetes runtime acceptance not performed
 images:
   BACKEND_IMAGE:
-    tag: platform-integration/backend:bc241eeb53267a62
-    local_image_id: sha256:9fe6017168e4b2de7f5bdf981873179c269a38dae85f0e15736912b91d3cbb02
+    tag: platform-integration/backend:60dece1d39c0b694
+    local_image_id: sha256:970b340b94f16b410d4aefd2df45d9209b387c6bf0b6f5163d9c6d5fa7dc5c53
     os: linux
     architecture: arm64
     registry_manifest_digests: []
     availability: verified in local Docker engine; registry publication not established
-    source_set: platform-backend-bc241eeb53267a62
+    source_set: platform-backend-60dece1d39c0b694
   SAHARA_IMAGE:
-    tag: platform-integration/sahara:0b4dc591f632171b
-    local_image_id: sha256:77beaec2873bc3482c523d882a7e0a421a427013be298eed4f6e1098fbd837fd
+    tag: platform-integration/sahara:60dece1d39c0b694
+    local_image_id: sha256:0b44d66e29ca7d5b89406a396d6e9eb195c228fb16233fb55f37a26437942393
     os: linux
     architecture: arm64
     registry_manifest_digests: []
     availability: verified in local Docker engine; registry publication not established
-    source_set: platform-backend-0b4dc591f632171b
+    source_set: platform-backend-60dece1d39c0b694
     build_args:
       SAHARA_BRIDGE_TOOLS_AUTODISCOVER: 'true'
   SIDECAR_IMAGE:
-    tag: platform-integration/sidecar:79a2b66330a21d23
-    local_image_id: sha256:4349ddc544f66e2bd8bc73707b6d1329aa5d98e50518f651ed44c2acdedb1f3c
+    tag: platform-integration/sidecar:60dece1d39c0b694
+    local_image_id: sha256:c976d59f6991ab6ac8498d22f7079a7c517ae63c3cdc4ba25667697f525bf7c9
     os: linux
     architecture: arm64
     registry_manifest_digests: []
     availability: verified in local Docker engine; registry publication not established
-    source_set: platform-backend-79a2b66330a21d23
+    source_set: platform-backend-60dece1d39c0b694
     dependency_images:
-      aether: sha256:7cf1a317581c823579fd64630fe6784e178124ba28e1ef6b63831d31f3d8ff42
+      aether: sha256:66e0350ea74f30ec983b3008ff1690cd0cb224a265d8f0b25bfdad0fc182f853
   PROVIDER_IMAGE:
-    tag: platform-integration/provider:0a84cc9a783f55b5
-    local_image_id: sha256:5d3a238b0c91c778226d411b11bdd48f649b3d536328d02625243add8ef491e0
+    tag: platform-integration/provider:60dece1d39c0b694
+    local_image_id: sha256:67d4aeeda3750e72d72e302a874b0fc44afb7354c0e983cfe832c4379f17fecd
     os: linux
     architecture: arm64
     registry_manifest_digests: []
     availability: verified in local Docker engine; registry publication not established
-    source_set: platform-backend-0a84cc9a783f55b5
+    source_set: platform-backend-60dece1d39c0b694
   CODE_IMAGE:
-    tag: platform-integration/code:115c4a3ffbf5657b
-    local_image_id: sha256:2cf326fe5d707e447e83851d2faaefbc15b047d0304212b3d4453e0651025e23
+    tag: platform-integration/code:60dece1d39c0b694
+    local_image_id: sha256:b5fc0beca8ea9db363772a1400566ed4a4ca045977a6c7fb02e290e1bdc6039b
     os: linux
     architecture: arm64
     registry_manifest_digests: []
     availability: verified in local Docker engine; registry publication not established
-    source_set: platform-backend-115c4a3ffbf5657b
+    source_set: platform-backend-60dece1d39c0b694
     dependency_images:
-      code_base: sha256:24a4dd7590091341d347337f4aed171a185e32333b764f5ff432523c9143bdf3
+      code_base: sha256:944c57f76c9ab7d382d1f2ecae719010ca33f53166b9ffc8d89add19f7904f13
   TOOLS_IMAGE:
-    tag: platform-integration/tools:066da093ee548c08
-    local_image_id: sha256:4b6ed1d0c0cdc3f9acdce5a25a34cee167006d6b96c6f9035797c6dc0a3c058c
+    tag: platform-integration/tools:60dece1d39c0b694
+    local_image_id: sha256:c14965b580b78e25a670714b48acc8c2156db2b3e902f3768d1fcd441c8e58ac
     os: linux
     architecture: arm64
     registry_manifest_digests: []
     availability: verified in local Docker engine; registry publication not established
-    source_set: platform-backend-066da093ee548c08
+    source_set: platform-backend-60dece1d39c0b694
   SKILLS_IMAGE:
-    tag: platform-integration/skills:115c4a3ffbf5657b
-    local_image_id: sha256:cf6e0d4b133958a17ecf4dfd6ec2a8c633e3adf1c05ef5b55727d0f7fbd404a3
+    tag: platform-integration/skills:60dece1d39c0b694
+    local_image_id: sha256:8df12609bb6574231a0f8beda2bb254f6a5b487515cd5e88f89b613f892d2324
     os: linux
     architecture: arm64
     registry_manifest_digests: []
     availability: verified in local Docker engine; registry publication not established
-    source_set: platform-backend-115c4a3ffbf5657b
+    source_set: platform-backend-60dece1d39c0b694
+  ORCHESTRATOR_IMAGE:
+    tag: platform-integration/orchestrator:60dece1d39c0b694
+    local_image_id: sha256:80f997ae6f915ecaf259457fbda0843748d93f10bcf16b2e9434a23c798fa717
+    os: linux
+    architecture: arm64
+    registry_manifest_digests: []
+    availability: verified in local Docker engine; registry publication not established
+    source_set: platform-backend-60dece1d39c0b694
   MEMORYLAYER_IMAGE:
-    tag: platform-integration/memorylayer:22919d440915af23
-    local_image_id: sha256:9231886dcbda4dd9920ec7bd1b473a1ad90b14fb8bf0654d3f2d23858d2e2db3
+    tag: platform-integration/memorylayer:9b4843491c4b4e4f
+    local_image_id: sha256:ca756c0dc8a01b5cc9000a2edbfa7ed827cd7093e6af738da87b72dc1f9106d5
     os: linux
     architecture: arm64
     registry_manifest_digests: []
     availability: verified in local Docker engine; registry publication not established
-    source_set: memorylayer-enterprise-22919d440915af23
+    source_set: memorylayer-enterprise-9b4843491c4b4e4f
   CONNECTORS_IMAGE:
-    tag: platform-integration/connectors:61195a3da53dba35
-    local_image_id: sha256:b25488fb8f415872f8e8f9c4cfd5314c218f429730532405231893d289cdc137
+    tag: platform-integration/connectors:9b4843491c4b4e4f
+    local_image_id: sha256:f9a2f04c864ab4f916838f54f8b16ea13bbdfe3261b766d143be8d195284ccf7
     os: linux
     architecture: arm64
     registry_manifest_digests: []
     availability: verified in local Docker engine; registry publication not established
-    source_set: memorylayer-enterprise-61195a3da53dba35
+    source_set: memorylayer-enterprise-9b4843491c4b4e4f
   ML_POSTGRES_IMAGE:
-    tag: platform-integration/ml_postgres:e75662e7670d12bc
-    local_image_id: sha256:36546326ec511f99b85e83fa1560f0e4d62b027f344383da707b960251fb57af
+    tag: platform-integration/ml_postgres:9b4843491c4b4e4f
+    local_image_id: sha256:2534879dda3a2bb039ffa3b9fc149ef4abc006703f0762627d0a3561a1b43698
     os: linux
     architecture: arm64
     registry_manifest_digests: []
     availability: verified in local Docker engine; registry publication not established
-    source_set: memorylayer-enterprise-e75662e7670d12bc
+    source_set: memorylayer-enterprise-9b4843491c4b4e4f
   ML_CNPG_IMAGE:
-    tag: platform-integration/ml_cnpg:17.11-e75662e7670d12bc
-    local_image_id: sha256:22affb703bbd19eacb3a4de389b4c239cb6db452004a6f808f1dacd895fd12b9
+    tag: platform-integration/ml_cnpg:17.11-9b4843491c4b4e4f
+    local_image_id: sha256:cec7f95a7e55b37d1fd4ffb6a66b0b0ce95e0d8ec503054fd33300985090674c
     os: linux
     architecture: arm64
     registry_manifest_digests: []
     availability: verified in local Docker engine; registry publication not established
-    source_set: memorylayer-enterprise-e75662e7670d12bc
+    source_set: memorylayer-enterprise-9b4843491c4b4e4f
   EDGE_IMAGE:
     tag: platform-integration/edge:88274bd9b3fa5b7d
-    local_image_id: sha256:4aece3000cb0f6777439d02526665193f62823f0139f4e07a532e977cdae3395
+    local_image_id: sha256:e5786548d2a97d464467f96ed83526b5d5228dc65d214ef0687079dda9c0ceec
     os: linux
     architecture: arm64
     registry_manifest_digests: []
@@ -131,7 +147,7 @@ images:
     source_set: memorylayer-storage-88274bd9b3fa5b7d
   BLOBGW_IMAGE:
     tag: platform-integration/blobgw:88274bd9b3fa5b7d
-    local_image_id: sha256:d3b2adb10f156f1f7dd2bc9a68c38192e76658483cb61cec8dd370a3a67a4537
+    local_image_id: sha256:cd5c0fa090e2fa8382ea57638abb140dd1bbdcd6b076f9651aa476ea43d10b11
     os: linux
     architecture: arm64
     registry_manifest_digests: []
@@ -146,24 +162,24 @@ images:
     availability: verified in local Docker engine; registry publication not established
     source_set: auth-go-e566e1b2af578861
   WEB_IMAGE:
-    tag: platform-integration/web:4b89a4947491ffb4
-    local_image_id: sha256:49c9c46785eba54cf917541f2c0bee231b9ccbb752f1bb71443522bed3453a0d
+    tag: platform-integration/web:16ef11e56db7a401
+    local_image_id: sha256:a5c1b8c971d4ca9d1eca08cd9333e5b1fc61e95cdb9c527b0f836d2c92cdd25e
     os: linux
     architecture: arm64
     registry_manifest_digests: []
     availability: verified in local Docker engine; registry publication not established
-    source_set: platform-frontend-4b89a4947491ffb4
+    source_set: platform-frontend-16ef11e56db7a401
     matching_source_archive:
       url_path: /source.tar.gz
-      sha256: f34ee37305ae3276b0ec8473ce786b02dc3f469ef391e43426461e51a0111b84
+      sha256: fcc1fa388710789ce6491ac40d96e89e4da9ba7f6f9f3006d0c8535206195c7d
   AETHER_IMAGE:
-    tag: platform-integration/aether:e696cd34c5b468dc
-    local_image_id: sha256:633e8e7c8dd9bd054b830e828fe64b201a47df0327497e2a728cc8f39d7aa955
+    tag: platform-integration/aether:42166abdce4a0322
+    local_image_id: sha256:66e0350ea74f30ec983b3008ff1690cd0cb224a265d8f0b25bfdad0fc182f853
     os: linux
     architecture: arm64
     registry_manifest_digests: []
     availability: verified in local Docker engine; registry publication not established
-    source_set: aether-e696cd34c5b468dc
+    source_set: aether-42166abdce4a0322
   SPARKROUTE_IMAGE:
     tag: platform-integration/sparkroute-enterprise:9b918bb79fb071ef
     local_image_id: sha256:a1bcd5fb7d41c25413cf526e7a69edfb18daabcacf9d06ffb35e7fc7a82a8e11
@@ -179,241 +195,81 @@ images:
         NODE_IMAGE: node:24.13.0-bookworm-slim@sha256:4660b1ca8b28d6d1906fd644abe34b2ed81d15434d26d845ef0aced307cf4b6f
         RUNTIME_IMAGE: gcr.io/distroless/static-debian12:nonroot@sha256:afa5c872c891853ca7fcf1f12c3edb23f7eeef36189728842dd51042ff57f7ab
   CODE_BASE_IMAGE:
-    tag: platform-integration/code_base:115c4a3ffbf5657b
-    local_image_id: sha256:24a4dd7590091341d347337f4aed171a185e32333b764f5ff432523c9143bdf3
+    tag: platform-integration/code_base:60dece1d39c0b694
+    local_image_id: sha256:944c57f76c9ab7d382d1f2ecae719010ca33f53166b9ffc8d89add19f7904f13
     os: linux
     architecture: arm64
     registry_manifest_digests: []
     availability: verified in local Docker engine; registry publication not established
-    source_set: platform-backend-115c4a3ffbf5657b
-  SIDECAR_AETHER_BUILD_BASE:
-    tag: platform-integration/aether:c071a4248a4ff452
-    local_image_id: sha256:7cf1a317581c823579fd64630fe6784e178124ba28e1ef6b63831d31f3d8ff42
-    os: linux
-    architecture: arm64
-    registry_manifest_digests: []
-    availability: verified in local Docker engine; registry publication not established
-    source_set: aether-c071a4248a4ff452
-    role: build dependency of SIDECAR_IMAGE, not the tenant gateway image
+    source_set: platform-backend-60dece1d39c0b694
 source_sets:
-  platform-backend-bc241eeb53267a62:
+  platform-backend-60dece1d39c0b694:
     component: platform-backend
-    base_revision: 7c6c1d4e7ad90182f6449be0710db25404d9a57d
-    tracked_content_sha256: bc241eeb53267a62fd8b76b179bf69fa6b29a6c9b9d2eba1774baf42e2a5c272
-    dirty: true
-    reviewed_file_count: 1743
-    include_untracked:
-    - backend/tests/test_gateway_projection_config.py
-    - sandbox-provider/internal/provider/docker/reconcile_creation_test.go
-    - sandbox-provider/internal/provider/k8s/single_namespace_test.go
-    - backend/scitrera_app_server/provisioning/service_acl_policy.py
-    - backend/tests/_provisioning/test_service_acl_policy.py
-    - tools-wss/internal/config/tls.go
-    - tools-wss/internal/config/tls_test.go
-    - sandbox/components/execd/pkg/jupyter/readiness_test.go
-    - sandbox-provider/internal/provider/image_identity_test.go
-    - agent-harness/sahara/patches/agent-harness-model-history.patch
-    - agent-harness/sahara/patches/README.md
-    - sandbox/images/sandbox-sidecar2/internal/app/proxy_stream.go
-    - sandbox/images/sandbox-sidecar2/internal/app/proxy_stream_test.go
-    - agent-harness/sahara/patches/aether-task-query-correlation.patch
-    - agent-harness/sahara/multimodal/uploader_test.go
-    - backend/tests/_scitrera_app_server/tenant_api/test_recent_chat_history.py
-    source_availability: anonymous availability pending
-    patch: patches/platform-backend-bc241eeb53267a62.patch
-    patch_sha256: 3daa41b0b64bba64ba59bfafc4b6a8509732e03b262095e8b34833e71b22918b
-  platform-backend-79a2b66330a21d23:
-    component: platform-backend
-    base_revision: 7c6c1d4e7ad90182f6449be0710db25404d9a57d
-    tracked_content_sha256: 79a2b66330a21d23b8872bcb582746084e588d5931e75a8142bae80d911be9ac
-    dirty: true
-    reviewed_file_count: 1740
-    include_untracked:
-    - backend/tests/test_gateway_projection_config.py
-    - sandbox-provider/internal/provider/docker/reconcile_creation_test.go
-    - sandbox-provider/internal/provider/k8s/single_namespace_test.go
-    - backend/scitrera_app_server/provisioning/service_acl_policy.py
-    - backend/tests/_provisioning/test_service_acl_policy.py
-    - tools-wss/internal/config/tls.go
-    - tools-wss/internal/config/tls_test.go
-    - sandbox/components/execd/pkg/jupyter/readiness_test.go
-    - sandbox-provider/internal/provider/image_identity_test.go
-    - agent-harness/sahara/patches/agent-harness-model-history.patch
-    - agent-harness/sahara/patches/README.md
-    - sandbox/images/sandbox-sidecar2/internal/app/proxy_stream.go
-    - sandbox/images/sandbox-sidecar2/internal/app/proxy_stream_test.go
-    source_availability: anonymous availability pending
-    patch: patches/platform-backend-79a2b66330a21d23.patch
-    patch_sha256: 1c1a29af29c8a927c36d98a667859d64ebe05399dd716b0d7f8c22a25c35ba39
-  platform-backend-0a84cc9a783f55b5:
-    component: platform-backend
-    base_revision: 7c6c1d4e7ad90182f6449be0710db25404d9a57d
-    tracked_content_sha256: 0a84cc9a783f55b52b2c1742aed28ddaa226fcd047d78f5f805445b69a6f351b
-    dirty: true
-    reviewed_file_count: 1736
-    include_untracked:
-    - backend/tests/test_gateway_projection_config.py
-    - sandbox-provider/internal/provider/docker/reconcile_creation_test.go
-    - sandbox-provider/internal/provider/k8s/single_namespace_test.go
-    - backend/scitrera_app_server/provisioning/service_acl_policy.py
-    - backend/tests/_provisioning/test_service_acl_policy.py
-    - tools-wss/internal/config/tls.go
-    - tools-wss/internal/config/tls_test.go
-    - sandbox/components/execd/pkg/jupyter/readiness_test.go
-    - sandbox-provider/internal/provider/image_identity_test.go
-    source_availability: anonymous availability pending
-    patch: patches/platform-backend-0a84cc9a783f55b5.patch
-    patch_sha256: d316c3ea39168b1bc121b9a1dde44c3f7e1e6eb04908adf329fd938a7709bc12
-  platform-backend-115c4a3ffbf5657b:
-    component: platform-backend
-    base_revision: 7c6c1d4e7ad90182f6449be0710db25404d9a57d
-    tracked_content_sha256: 115c4a3ffbf5657b1405eb1038cc05c545d8b45e7ea5fe61d736db555dff7506
-    dirty: true
-    reviewed_file_count: 1736
-    include_untracked:
-    - backend/tests/test_gateway_projection_config.py
-    - sandbox-provider/internal/provider/docker/reconcile_creation_test.go
-    - sandbox-provider/internal/provider/k8s/single_namespace_test.go
-    - backend/scitrera_app_server/provisioning/service_acl_policy.py
-    - backend/tests/_provisioning/test_service_acl_policy.py
-    - tools-wss/internal/config/tls.go
-    - tools-wss/internal/config/tls_test.go
-    - sandbox/components/execd/pkg/jupyter/readiness_test.go
-    source_availability: anonymous availability pending
-    patch: patches/platform-backend-115c4a3ffbf5657b.patch
-    patch_sha256: 2a56d6c4f5a4b7af5b7fdcae5f04caf85ae798aac996b88d7fdc99838fcd6399
-  platform-backend-066da093ee548c08:
-    component: platform-backend
-    base_revision: 7c6c1d4e7ad90182f6449be0710db25404d9a57d
-    tracked_content_sha256: 066da093ee548c08f2fd67f9d0064924502e1cfc4644620a71254b463ffd2b53
-    dirty: true
-    reviewed_file_count: 1735
-    include_untracked:
-    - backend/tests/test_gateway_projection_config.py
-    - sandbox-provider/internal/provider/docker/reconcile_creation_test.go
-    - sandbox-provider/internal/provider/k8s/single_namespace_test.go
-    - backend/scitrera_app_server/provisioning/service_acl_policy.py
-    - backend/tests/_provisioning/test_service_acl_policy.py
-    - tools-wss/internal/config/tls.go
-    - tools-wss/internal/config/tls_test.go
-    source_availability: anonymous availability pending
-    patch: patches/platform-backend-066da093ee548c08.patch
-    patch_sha256: 628e9c467382a0b43fd6a606a6d0981b5575626af56f5cd3fd23aec561b65874
-  memorylayer-enterprise-22919d440915af23:
+    repository: https://github.com/scitrera/platform-backend
+    revision: aba850337184b34d5d38a77c5fa46c991f5bcc6f
+    tracked_content_sha256: 60dece1d39c0b69475cfa95219e85359de8ec9fd12acbdf397f938c2d8b1674d
+    dirty: false
+    reviewed_file_count: 1756
+    include_untracked: []
+    availability: local component commit; remote not configured
+  memorylayer-enterprise-9b4843491c4b4e4f:
     component: memorylayer-enterprise
-    base_revision: 49202bfc586b99055e28d69849c9ec0cd80b245c
-    tracked_content_sha256: 22919d440915af23f2151765b9779a87165b8185fcf2a261205289d51f2f48f3
-    dirty: true
+    repository: https://github.com/scitrera/memorylayer-enterprise
+    revision: 5e5c5e80a04f4091282bcb3aee951dbff15f9ec0
+    tracked_content_sha256: 9b4843491c4b4e4f931da5225998453c3ae079df700f97544dc21b114866a05b
+    dirty: false
     reviewed_file_count: 592
     include_untracked: []
-    source_availability: anonymous availability pending
-    patch: patches/memorylayer-enterprise-22919d440915af23.patch
-    patch_sha256: 1e43e71520d7a0c4056eaa27d615aa6182522ac7dad2e51aba33f2dd5f20d101
-  memorylayer-enterprise-61195a3da53dba35:
-    component: memorylayer-enterprise
-    base_revision: 49202bfc586b99055e28d69849c9ec0cd80b245c
-    tracked_content_sha256: 61195a3da53dba35fa395823e673a8b73300b3859503a73aca57e6471206b452
-    dirty: true
-    reviewed_file_count: 592
-    include_untracked: []
-    source_availability: anonymous availability pending
-    patch: patches/memorylayer-enterprise-61195a3da53dba35.patch
-    patch_sha256: 93b3c04433d9bbb6a92fbc044883c34b513bcbbb8ead8a188490f71249f459cf
-  memorylayer-enterprise-e75662e7670d12bc:
-    component: memorylayer-enterprise
-    base_revision: 49202bfc586b99055e28d69849c9ec0cd80b245c
-    tracked_content_sha256: e75662e7670d12bccc36b3b3ab42c6dd9ca1b2d650b62b0788ae069f35af6cbc
-    dirty: true
-    reviewed_file_count: 592
-    include_untracked: []
-    source_availability: anonymous availability pending
-    patch: patches/memorylayer-enterprise-e75662e7670d12bc.patch
-    patch_sha256: 0a4c10d7836d0d8921a4d0502480afb9773485ccc94698a1e97efe6617566ae4
+    availability: upstream source available anonymously
+    upstream_pr: https://github.com/scitrera/memorylayer-enterprise/pull/2
   memorylayer-storage-88274bd9b3fa5b7d:
     component: memorylayer-storage
-    base_revision: 7888a33d3d2ae9bef9cf71c5eecfbfc0716e99dd
+    repository: https://github.com/scitrera/memorylayer-storage
+    revision: 71d41d728572dfeffc36441b96d6954b607eb35e
     tracked_content_sha256: 88274bd9b3fa5b7d0db0d89a47e6fdacfd4b69e0b3b73a56781120160f334cfe
-    dirty: true
+    dirty: false
     reviewed_file_count: 564
-    include_untracked:
-    - blobgw/pgindex/migrate_concurrency_test.go
-    source_availability: anonymous availability pending
-    patch: patches/memorylayer-storage-88274bd9b3fa5b7d.patch
-    patch_sha256: 52b9ec3151e6106175b69b5dfc32adfae6854ba3efce97d9d87f9c33bde5efbe
+    include_untracked: []
+    availability: upstream source available anonymously
+    upstream_pr: https://github.com/scitrera/memorylayer-storage/pull/1
   auth-go-e566e1b2af578861:
     component: auth-go
-    base_revision: eb50916f302772bdd0a82fe642c08f40f2b3a183
+    repository: https://github.com/scitrera/scitrera-auth-go
+    revision: eb50916f302772bdd0a82fe642c08f40f2b3a183
     tracked_content_sha256: e566e1b2af578861408ed76f9164d193648f98df76d088c50a64ae125b1a89cc
     dirty: false
     reviewed_file_count: 316
     include_untracked: []
-    source_availability: anonymous availability pending
-    patch: null
-  platform-frontend-4b89a4947491ffb4:
+    availability: upstream source available anonymously
+  platform-frontend-16ef11e56db7a401:
     component: platform-frontend
-    base_revision: 7e8031ce34d73473b653457d8ec4358172671389
-    tracked_content_sha256: 4b89a4947491ffb44ed9043c206dee54d47010997ca442e7763bf01073f7ee4d
-    dirty: true
-    reviewed_file_count: 413
-    include_untracked:
-    - web/src/hooks/useChatState.test.tsx
-    source_availability: anonymous availability pending
-    patch: patches/platform-frontend-4b89a4947491ffb4.patch
-    patch_sha256: 360b2bc877663d394c27a20f063b6f7ece99d4c05311b126abfb6903773c114b
-  aether-e696cd34c5b468dc:
+    repository: https://github.com/scitrera/platform-frontend
+    revision: 10ce64e2426398b497ae93c8056c0a552861cb1b
+    tracked_content_sha256: 16ef11e56db7a40131898789546c85b7b2815396cde8a0ff5c30497629104162
+    dirty: false
+    reviewed_file_count: 415
+    include_untracked: []
+    availability: local component commit; remote not configured
+  aether-42166abdce4a0322:
     component: aether
-    base_revision: 22570eb0bd3b64d8bc936e614264a62f5c0c6ff1
-    tracked_content_sha256: e696cd34c5b468dc18f046bd6f81b1fef406465b5092854ef0f4b3363cfb57c9
-    dirty: true
-    reviewed_file_count: 1128
-    include_untracked:
-    - server/cmd/aetherlite/auth_verify.go
-    - server/cmd/aetherlite/auth_verify_test.go
-    - server/pkg/authproxy/api_key_header_test.go
-    - sdk/go/aether/task_query_correlation_test.go
-    - server/internal/gateway/task_input.go
-    - server/internal/gateway/task_input_test.go
-    - server/docs/task-input.md
-    source_availability: anonymous availability pending
-    patch: patches/aether-e696cd34c5b468dc.patch
-    patch_sha256: 4856e48eaccf41d584fb2b36231c22059a260ce50da21abb8528b5fe6693182c
-  aether-c071a4248a4ff452:
-    component: aether
-    base_revision: 22570eb0bd3b64d8bc936e614264a62f5c0c6ff1
-    tracked_content_sha256: c071a4248a4ff452112f3ab55ee005cc4a2097e654a5d4f615672c950a6a138e
-    dirty: true
-    reviewed_file_count: 1124
-    include_untracked:
-    - server/cmd/aetherlite/auth_verify.go
-    - server/cmd/aetherlite/auth_verify_test.go
-    - server/pkg/authproxy/api_key_header_test.go
-    source_availability: anonymous availability pending
-    patch: patches/aether-c071a4248a4ff452.patch
-    patch_sha256: 7de835d6911a0461417844a9f3631913f3a8697ab8fc756d3044282050379095
-  platform-backend-0b4dc591f632171b:
-    component: platform-backend
-    base_revision: 7c6c1d4e7ad90182f6449be0710db25404d9a57d
-    tracked_content_sha256: 0b4dc591f632171bca1bb8fc8eb4e0ce76d811b2b2a220e9b5680e24cac56e5f
-    dirty: true
-    reviewed_file_count: 1744
-    include_untracked:
-    - backend/tests/test_gateway_projection_config.py
-    - sandbox-provider/internal/provider/docker/reconcile_creation_test.go
-    - sandbox-provider/internal/provider/k8s/single_namespace_test.go
-    - backend/scitrera_app_server/provisioning/service_acl_policy.py
-    - backend/tests/_provisioning/test_service_acl_policy.py
-    - tools-wss/internal/config/tls.go
-    - tools-wss/internal/config/tls_test.go
-    - sandbox/components/execd/pkg/jupyter/readiness_test.go
-    - sandbox-provider/internal/provider/image_identity_test.go
-    - agent-harness/sahara/patches/agent-harness-model-history.patch
-    - agent-harness/sahara/patches/README.md
-    - sandbox/images/sandbox-sidecar2/internal/app/proxy_stream.go
-    - sandbox/images/sandbox-sidecar2/internal/app/proxy_stream_test.go
-    - agent-harness/sahara/patches/aether-task-query-correlation.patch
-    - agent-harness/sahara/multimodal/uploader_test.go
-    - backend/tests/_scitrera_app_server/tenant_api/test_recent_chat_history.py
-    - agent-harness/sahara/cmd/scitrera-agent-harness/provider_usage_test.go
-    source_availability: anonymous availability pending
-    patch: patches/platform-backend-0b4dc591f632171b.patch
-    patch_sha256: d74459478d190f8d33a04b6f9a5abec396845257f7db23edb3279ac83695d7d1
+    repository: https://github.com/scitrera/aether
+    revision: bbc397f6a08521fcecfbf7fcb567456076f4e3ce
+    tracked_content_sha256: 42166abdce4a0322e33e8a42bd448b2bfeac1c4af8c9ffffb76195cad67e968b
+    dirty: false
+    reviewed_file_count: 1131
+    include_untracked: []
+    availability: upstream source available anonymously
+    upstream_pr: https://github.com/scitrera/aether/pull/7
+upstream_changes:
+  sahara-oss:
+    pull_request: https://github.com/scitrera/agent-harness-go/pull/1
+    status: draft; not merged
+  aether:
+    pull_request: https://github.com/scitrera/aether/pull/7
+    status: draft; not merged
+  memorylayer-enterprise:
+    pull_request: https://github.com/scitrera/memorylayer-enterprise/pull/2
+    status: draft; not merged
+  memorylayer-storage:
+    pull_request: https://github.com/scitrera/memorylayer-storage/pull/1
+    status: draft; not merged

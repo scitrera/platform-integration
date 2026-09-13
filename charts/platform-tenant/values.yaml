@@ -92,3 +92,8 @@ toolsWorkspace: default
 existingClaims: {}
 
 blobUploadBaseURL: ""
+
+# Optional tenant-owned workers selected per conversation.
+workProfiles:
+  profiles: {}
+  allowedProfiles: []

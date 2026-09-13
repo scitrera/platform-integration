@@ -19,6 +19,8 @@ spec:
       platform.scitrera.io/trust: service
   template:
     metadata:
+      annotations:
+        checksum/work-profiles: {{ .Values.workProfiles | toJson | sha256sum }}
       labels:
         app.kubernetes.io/instance: {{ .Release.Name }}
         app.kubernetes.io/component: platform
@@ -47,6 +49,8 @@ spec:
         resources:
 {{ toYaml (index .Values.roleResources "platform" | default .Values.resources) | indent 10 }}
         env:
+        - name: SCITRERA_WORK_PROFILES_FILE
+          value: /run/work-profiles/profiles.json
         - name: SANDBOX_BLOB_FETCH_BASE_URL
           value: {{ .Values.blobFetchBaseURL | quote }}
         - name: SANDBOX_BLOB_UPLOAD_BASE_URL
@@ -90,6 +94,9 @@ spec:
         - name: SAHARA_CODE_SIDECAR_IMAGE
           value: {{ required "images.code is required" .Values.images.code | quote }}
         volumeMounts:
+        - name: work-profiles
+          mountPath: /run/work-profiles
+          readOnly: true
         - name: tmp
           mountPath: /tmp
         - name: anonymous
@@ -126,6 +133,9 @@ spec:
           timeoutSeconds: 3
           failureThreshold: 6
       volumes:
+      - name: work-profiles
+        configMap:
+          name: {{ .Release.Name }}-work-profiles
       - name: tmp
         emptyDir: {}
       - name: anonymous

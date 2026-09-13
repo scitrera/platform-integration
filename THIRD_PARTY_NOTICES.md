@@ -1,19 +1,17 @@
 # Component terms
 
-New integration code is AGPL-3.0-only. Component source patches retain their
-original terms. The exact base revisions, patch checksums, local image IDs and
-source relationships are in versions.yaml; patches/README.md explains selection.
+New integration code is AGPL-3.0-only. Component implementations remain in their
+own repositories. Their exact source revisions, local image IDs and source
+relationships are recorded in versions.yaml; docs/upstream.md explains ownership.
 
-Platform backend and frontend are primarily AGPL-3.0-only. Backend patches to
-sandbox/components/execd and sandbox/images/sandbox-sidecar2 retain Apache-2.0;
-the nested agent-harness-go and Aether SDK patches also retain Apache-2.0.
-Their notice and license texts are preserved in the source or LICENSES/.
-Other backend/provider/tools and frontend application changes retain AGPL-3.0-only.
+Platform backend and frontend are primarily AGPL-3.0-only. Backend's
+sandbox/components/execd and sandbox/images/sandbox-sidecar2 retain Apache-2.0.
+The agent-harness-go and Aether SDK dependencies are Apache-2.0. Their owning
+distributions preserve license and notice texts.
 
-Aether patches are Apache-2.0. MemoryLayer core remains Apache-2.0; the included
-enterprise/data-connectors and storage gateway/edge patches are AGPL-3.0-only.
-Storage libraries retain their existing Apache-2.0 terms. Auth-go is
-AGPL-3.0-only and its selected source revision needs no patch.
+Aether and MemoryLayer core are Apache-2.0. MemoryLayer enterprise/data-connectors
+and storage gateway/edge are AGPL-3.0-only. Storage libraries retain their existing
+Apache-2.0 terms. Auth-go is AGPL-3.0-only.
 
 PostgreSQL, Nginx, Valkey, MinIO, Kubernetes operators, build tools and base
 distributions retain their upstream terms and embedded notices. Their source is

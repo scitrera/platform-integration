@@ -16,23 +16,22 @@ object. Keys include platform-backend, platform-frontend, auth-go, aether,
 memorylayer-enterprise and memorylayer-storage. Paths can be anywhere the
 operator can read; this repository does not assume sibling checkouts.
 
-Select the revisions and bounded patches listed in versions.yaml. Local dirty
-source preparation requires --allow-dirty and an explicit --include-untracked
-JSON allowlist. The builder snapshots reviewed tracked files, records the source
-hash and local image ID, and never pushes images. Supply an already built image
-with --use-image KEY=TAG; that records its ID without claiming source provenance.
+Check out each component's exact `revision` in `versions.yaml` and use a clean
+working tree. The compatibility manifest now selects committed source in the
+owning repositories; no patch application is required. See
+[upstream ownership](upstream.md) for review and source availability status.
 
-Build the exact source sets separately as described in patches/README.md.
-Several images of the same component were verified from different snapshots;
-one all-images build from a single checkout does not reproduce versions.yaml.
-For each source set, use its base revision, patch and include_untracked list,
-then select only its associated images with --select.
+The builder snapshots tracked files and records the content hash and local image
+ID. Its hash must match the selected source set before relying on that selection.
+Local development with uncommitted changes remains available through explicit
+`--allow-dirty` and `--include-untracked` options. Supply an already built image
+with `--use-image KEY=TAG` to record its ID without claiming source provenance.
 
-Build CODE_BASE_IMAGE before CODE_IMAGE. Build the historical
-SIDECAR_AETHER_BUILD_BASE as AETHER_IMAGE before SIDECAR_IMAGE, then select the
-current tenant AETHER_IMAGE. Build the remaining independent images from their
-recorded snapshots. The selected image IDs and input hashes are recorded in
-.local/images.json. Web packaging includes its matching source archive.
+Build `AETHER_IMAGE` before `SIDECAR_IMAGE` and `CODE_BASE_IMAGE` before
+`CODE_IMAGE`. One checkout per component now supplies all its images. The sidecar
+uses the same Aether revision as the tenant gateway; dependency image IDs are
+recorded explicitly in `.local/images.json`. Web packaging includes its matching
+source archive.
 
 SparkRoute enterprise is a separately permitted input. Use
 scripts/build_sparkroute.py with explicit --enterprise-source and --oss-source

@@ -146,6 +146,12 @@ class Handler(BaseHTTPRequestHandler):
                     response=('Verified browser tool ' if 'fullscreen' in tool_results[-1] else 'Browser tool failed ')+marker[-1]
                 else:
                     response='Browser tool was not advertised '+marker[-1]
+            if 'fixture-work-profile-policy' in user_text and marker:
+                names={item.get('function',{}).get('name') for item in data.get('tools',[])}
+                forbidden={'read_file','write_file','apply_patch','python','shell','vfs_get','spawn_subagent','create_goal'}
+                system=' '.join(str(m.get('content','')) for m in data.get('messages',[]) if m.get('role')=='system')
+                valid=not (names & forbidden) and 'fixture-document-review-profile' in system
+                response=('Verified work profile policy ' if valid else 'Work profile policy failed ')+marker[-1]
             base={'id':'fixture-'+uuid.uuid4().hex,'object':'chat.completion','created':int(time.time()),'model':data.get('model','fixture-model')}
             usage={'prompt_tokens':10,'completion_tokens':4,'total_tokens':14}
             usage_event={**base,'object':'chat.completion.chunk','choices':[],'usage':usage}
