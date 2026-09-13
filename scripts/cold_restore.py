@@ -9,16 +9,25 @@ import subprocess
 import tarfile
 from cold_backup import ROOT, CONFIG, digest, helper, output
 from compose import command
+from compose_tenants import validate_tenants
 
 def validate_archive(path,config=False):
     with tarfile.open(path) as archive:
+        allowed = set(CONFIG) | {'alpha', 'beta'}
+        if config:
+            definitions = [m for m in archive.getmembers() if m.name == 'tenants.json']
+            if definitions:
+                if len(definitions) != 1 or not definitions[0].isfile():
+                    raise SystemExit('Invalid tenant definitions in configuration archive')
+                tenants = validate_tenants(json.load(archive.extractfile(definitions[0])))
+                allowed = set(CONFIG) | {tenant['slug'] for tenant in tenants}
         for member in archive:
             parts=Path(member.name).parts
             if Path(member.name).is_absolute() or ".." in parts:
                 raise SystemExit("Unsafe archive path")
             if not (member.isfile() or member.isdir()):
                 raise SystemExit("This restore profile refuses links, devices and special files")
-            if config and parts and parts[0] not in CONFIG:
+            if config and parts and parts[0] not in allowed:
                 raise SystemExit("Configuration archive contains an unrecognized entry")
 
 def main():

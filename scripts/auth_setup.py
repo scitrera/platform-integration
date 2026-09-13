@@ -4,6 +4,7 @@ import argparse
 import http.cookiejar
 import json
 from pathlib import Path
+from compose_tenants import load_tenants
 import time
 from urllib.error import HTTPError, URLError
 from urllib.request import build_opener, HTTPCookieProcessor, Request
@@ -51,7 +52,7 @@ def main():
     env=dict(line.split('=',1) for line in (ROOT/'.local/compose.env').read_text().splitlines() if line and not line.startswith('#'))
     token=json.loads((ROOT/'.local/operators.json').read_text())['operators']['operator']
     operator=Operator(args.origin or 'http://127.0.0.1:'+env['AUTH_ADMIN_PORT'],token)
-    for tenant in json.loads((ROOT/'examples/compose/tenants.json').read_text()):
+    for tenant in load_tenants(ROOT):
         slug=tenant['slug']
         try:operator.read('/tenants/'+slug)
         except HTTPError as error:

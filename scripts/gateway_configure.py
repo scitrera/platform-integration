@@ -4,6 +4,7 @@ import argparse
 import hashlib
 import json
 from pathlib import Path
+from compose_tenants import load_tenants
 import secrets
 from configure import create, certificate
 
@@ -15,7 +16,7 @@ def main():
         help='Acknowledge deterministic inference; external providers need operator configuration')
     parser.add_argument('--extend-existing',action='store_true',help='Add missing fixture principals and aliases; existing records must match')
     args=parser.parse_args()
-    tenants=json.loads((ROOT/'examples/compose/tenants.json').read_text())
+    tenants=load_tenants(ROOT)
     clients=[]
     for tenant in tenants:
         slug=tenant['slug']

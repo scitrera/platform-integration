@@ -8,6 +8,8 @@ import re
 import secrets
 import subprocess
 
+from compose_tenants import select_tenants, write_compose
+
 ROOT = Path(__file__).resolve().parents[1]
 LOCAL = ROOT / '.local'
 
@@ -81,6 +83,7 @@ http {
 '''
     for tenant in tenants:
         slug = tenant['slug']
+        variable = slug.replace('-', '_')
         text += f'''    location = /{slug}/tools/v1/connect {{
       proxy_pass_request_headers off;
       proxy_http_version 1.1;
@@ -96,9 +99,9 @@ http {
       proxy_read_timeout 3600s;
       proxy_send_timeout 3600s;
       proxy_buffering off;
-      set $tools_{slug} http://tools-{slug}:8090;
+      set $tools_{variable} http://tools-{slug}:8090;
       rewrite ^/{slug}/tools/(.*)$ /$1 break;
-      proxy_pass $tools_{slug};
+      proxy_pass $tools_{variable};
     }}
 '''
         text += f'''    location = /_verify_{slug} {{
@@ -112,11 +115,11 @@ http {
     }}
     location ~ ^/{slug}/(rfe1-ws(?:/v2)?/?)$ {{
       auth_request /_verify_{slug};
-      auth_request_set $user_{slug} $upstream_http_x_scitrera_user;
-      auth_request_set $name_{slug} $upstream_http_x_scitrera_name;
-      auth_request_set $tenants_{slug} $upstream_http_x_scitrera_tenants;
-      auth_request_set $default_{slug} $upstream_http_x_scitrera_default_tenant;
-      auth_request_set $type_{slug} $upstream_http_x_auth_principal_type;
+      auth_request_set $user_{variable} $upstream_http_x_scitrera_user;
+      auth_request_set $name_{variable} $upstream_http_x_scitrera_name;
+      auth_request_set $tenants_{variable} $upstream_http_x_scitrera_tenants;
+      auth_request_set $default_{variable} $upstream_http_x_scitrera_default_tenant;
+      auth_request_set $type_{variable} $upstream_http_x_auth_principal_type;
       proxy_pass_request_headers off;
       proxy_http_version 1.1;
       proxy_set_header Host $host;
@@ -127,19 +130,19 @@ http {
       proxy_set_header Sec-WebSocket-Version $http_sec_websocket_version;
       proxy_set_header Sec-WebSocket-Protocol $http_sec_websocket_protocol;
       proxy_set_header Content-Type $http_content_type;
-      proxy_set_header X-Scitrera-User $user_{slug};
-      proxy_set_header X-Scitrera-Name $name_{slug};
-      proxy_set_header X-Scitrera-Tenants $tenants_{slug};
-      proxy_set_header X-Scitrera-Default-Tenant $default_{slug};
-      proxy_set_header X-Auth-User-ID $user_{slug};
+      proxy_set_header X-Scitrera-User $user_{variable};
+      proxy_set_header X-Scitrera-Name $name_{variable};
+      proxy_set_header X-Scitrera-Tenants $tenants_{variable};
+      proxy_set_header X-Scitrera-Default-Tenant $default_{variable};
+      proxy_set_header X-Auth-User-ID $user_{variable};
       proxy_set_header X-Auth-Tenant-ID {slug};
-      proxy_set_header X-Auth-Principal-Type $type_{slug};
+      proxy_set_header X-Auth-Principal-Type $type_{variable};
       proxy_read_timeout 3600s;
       proxy_send_timeout 3600s;
       proxy_buffering off;
-      set $platform_{slug} http://platform-{slug}:8000;
+      set $platform_{variable} http://platform-{slug}:8000;
       rewrite ^/{slug}/(.*)$ /$1 break;
-      proxy_pass $platform_{slug};
+      proxy_pass $platform_{variable};
     }}
 '''
         text += f'''    location ^~ /storage/{slug}/uploads/ {{
@@ -151,17 +154,17 @@ http {
       proxy_set_header Content-Length $http_content_length;
       client_max_body_size 128m;
       proxy_request_buffering off;
-      set $upload_{slug} http://objects:9000;
+      set $upload_{variable} http://objects:9000;
       rewrite ^/storage/{slug}/uploads/(.*)$ /$1 break;
-      proxy_pass $upload_{slug};
+      proxy_pass $upload_{variable};
     }}
 '''
         text += f'''    location ~ ^/storage/{slug}/(blob|staged|finalize)/ {{
       auth_request /_verify_{slug};
-      auth_request_set $storage_user_{slug} $upstream_http_x_scitrera_user;
+      auth_request_set $storage_user_{variable} $upstream_http_x_scitrera_user;
       proxy_pass_request_headers off;
       proxy_set_header X-Auth-Tenant-ID {slug};
-      proxy_set_header X-Scitrera-User $storage_user_{slug};
+      proxy_set_header X-Scitrera-User $storage_user_{variable};
       proxy_set_header Content-Type $http_content_type;
       proxy_set_header Range $http_range;
       proxy_set_header If-Range $http_if_range;
@@ -170,9 +173,9 @@ http {
       client_max_body_size 128m;
       proxy_request_buffering off;
       proxy_buffering off;
-      set $storage_{slug} http://storage-edge:8090;
+      set $storage_{variable} http://storage-edge:8090;
       rewrite ^/storage/{slug}/(.*)$ /$1 break;
-      proxy_pass $storage_{slug};
+      proxy_pass $storage_{variable};
     }}
 '''
     text += '''    location ~ /tools/ { return 404; }
@@ -190,6 +193,7 @@ http {
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--project', default='platform-integration')
+    parser.add_argument('--tenants', type=Path, help='Tenant JSON definitions for a fresh installation')
     parser.add_argument('--web-port', type=int, default=18080)
     parser.add_argument('--admin-port', type=int, default=18082)
     parser.add_argument('--fixture-idp-port', type=int, default=18090)
@@ -200,7 +204,8 @@ def main():
         parser.error('choose distinct unprivileged ports')
     os.umask(0o077)
     LOCAL.mkdir(exist_ok=True)
-    tenants=json.loads((ROOT/'examples/compose/tenants.json').read_text())
+    tenants=select_tenants(ROOT, args.tenants)
+    write_compose(ROOT, tenants)
     env={'COMPOSE_PROJECT_NAME':args.project,'WEB_PORT':args.web_port,'AUTH_ADMIN_PORT':args.admin_port,'FIXTURE_IDP_PORT':args.fixture_idp_port,
          'LOCAL_UID':os.getuid(),'LOCAL_GID':os.getgid(),'MT_PASSWORD':secrets.token_hex(24),
          'AUTH_HMAC':secrets.token_hex(32),'SANDBOX_HOST_ROOT':str(LOCAL/'sandbox-state')}
@@ -212,12 +217,13 @@ def main():
     env.setdefault('EDGE_SIGNING_SEED',secrets.token_hex(32))
     for tenant in tenants:
         slug=tenant['slug']
-        env.setdefault('ML_PASSWORD_'+slug.upper(),secrets.token_hex(24))
-        env.setdefault('DC_PASSWORD_'+slug.upper(),secrets.token_hex(24))
+        suffix=slug.upper().replace('-', '_')
+        env.setdefault('ML_PASSWORD_'+suffix,secrets.token_hex(24))
+        env.setdefault('DC_PASSWORD_'+suffix,secrets.token_hex(24))
         if not re.fullmatch('[a-z][a-z0-9-]{0,30}',slug):
             raise ValueError('Invalid synthetic tenant slug')
-        env.setdefault('AETHER_HMAC_'+slug.upper(),secrets.token_hex(32))
-        env.setdefault('AETHER_ADMIN_'+slug.upper(),secrets.token_hex(24))
+        env.setdefault('AETHER_HMAC_'+suffix,secrets.token_hex(32))
+        env.setdefault('AETHER_ADMIN_'+suffix,secrets.token_hex(24))
         tls=LOCAL/slug/'tls'
         ca=tls/'ca'
         certificate(ca, f'{args.project}-{slug}-development-ca')

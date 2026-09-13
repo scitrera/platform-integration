@@ -48,6 +48,30 @@ Generate new development material and explicitly select local fixtures:
     python3 scripts/gateway_configure.py --fixtures
     python3 scripts/dev.py up --fixtures
 
+To configure customer tenants instead of the two examples, supply a JSON list on
+first configuration:
+
+```json
+[{"slug": "customer", "name": "Customer", "email": "alice@example.test", "workspace": "default"}]
+```
+
+    python3 scripts/configure.py --tenants /path/to/tenants.json
+
+The definition is recorded in `.local/tenants.json` and reused by subsequent
+configuration, authentication enrollment, and gateway setup. Compose services,
+networks, storage buckets, certificates, administrator grants, and fixture
+services are generated from the maintained example templates. Generated Compose
+files remain private in `.local/`; the checked-in examples are unchanged.
+Tenant slugs accept lowercase letters, digits, and hyphens, starting with a letter.
+The fixture identity provider continues to offer its synthetic Alice/Bob identities;
+use a matching email for fixture login.
+
+Use a fresh integration directory to change tenant definitions. Existing tenant
+state and credentials are never renamed by configuration. Offline backups include
+the recorded definitions, generated Compose files, and each tenant's credentials.
+The default acceptance scripts still target the alpha/beta example installation;
+customer smoke tests must select their configured tenant.
+
 Image selection must precede dev.py. Its first run invokes auth-go's own
 bootstrap CLI for the operator credential file, starts/migrates auth, enrolls
 synthetic tenants through the public operator API, and starts the dependency

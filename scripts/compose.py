@@ -11,10 +11,15 @@ def command(*args):
     images=ROOT/'.local/images.env'
     if not env.is_file() or not images.is_file():
         raise SystemExit('Run configure.py and build.py first (.local inputs missing)')
+    generated=ROOT/'.local/compose.yaml'
+    if (ROOT/'.local/tenants.json').exists() and not generated.is_file():
+        raise SystemExit('Generated tenant Compose configuration is missing; rerun configure.py')
+    base=generated if generated.is_file() else ROOT/'compose/compose.yaml'
+    fixtures=ROOT/'.local/fixtures.yaml' if generated.is_file() else ROOT/'compose/profiles/fixtures.yaml'
     result=['docker','compose','--project-directory',str(ROOT/'compose'),
-            '--env-file',str(env),'--env-file',str(images),'-f',str(ROOT/'compose/compose.yaml')]
+            '--env-file',str(env),'--env-file',str(images),'-f',str(base)]
     if (ROOT/'.local/fixtures.enabled').exists():
-        result += ['-f',str(ROOT/'compose/profiles/fixtures.yaml')]
+        result += ['-f',str(fixtures)]
     return result+list(args)
 
 if __name__=='__main__':

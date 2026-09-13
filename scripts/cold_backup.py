@@ -7,10 +7,11 @@ import os
 from pathlib import Path
 import subprocess
 from compose import ROOT, command
+from compose_tenants import load_tenants
 
 CONFIG = ["compose.env", "images.env", "images.json", "oauth.env", "operators.json",
           "storage-credentials.json", "storage-tenants.json", "nginx.conf",
-          "fixture.env", "fixtures.enabled", "alpha", "beta", "gateway", "sandbox-state"]
+          "fixture.env", "fixtures.enabled", "tenants.json", "compose.yaml", "fixtures.yaml", "gateway", "sandbox-state"]
 
 def output(args):
     return subprocess.check_output(args, text=True).strip()
@@ -76,7 +77,7 @@ def main():
         helper(image,[*common,"type=volume,source="+name+",target=/data,readonly"],script)
         manifest["archives"][filename]={"volume":key,"sha256":digest(dest/filename)}
     script=("import os,tarfile; p='/backup/config.tar.gz'; t=tarfile.open(p,'w:gz'); "
-            "[t.add('/config/'+n,arcname=n) for n in "+repr(CONFIG)+" if os.path.exists('/config/'+n)]; "
+            "[t.add('/config/'+n,arcname=n) for n in "+repr(CONFIG + [tenant["slug"] for tenant in load_tenants(ROOT)])+" if os.path.exists('/config/'+n)]; "
             "t.close(); os.chmod(p,0o600); os.chown(p,"+str(uid)+","+str(gid)+")")
     helper(image,[*common,"type=bind,source="+str(ROOT/".local")+",target=/config,readonly"],script)
     manifest["archives"]["config.tar.gz"]={"configuration":True,"sha256":digest(dest/"config.tar.gz")}
