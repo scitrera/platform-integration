@@ -45,6 +45,20 @@ class Operator:
         revision=self.read('/status')['revision']
         return self.call(method,path,data,revision)
 
+def reconcile_default_workspace(operator, tenant):
+    """Explicit defaults (including null) update existing tenant landing behavior."""
+    if "default_workspace" not in tenant:
+        return
+    current = operator.read('/tenants/' + tenant['slug'])['data']
+    metadata = dict(current.get('metadata') or {})
+    desired = tenant['default_workspace']
+    if metadata.get('default_workspace') == desired:
+        return
+    metadata['default_workspace'] = desired
+    operator.write('PUT', '/tenants/' + tenant['slug'],
+                   {'name': current['name'], 'enabled': current['enabled'], 'metadata': metadata})
+
+
 def main():
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--origin',help='Explicit operator origin, for example a loopback Kubernetes port-forward')
@@ -58,9 +72,10 @@ def main():
         except HTTPError as error:
             if error.code!=404:raise
             operator.write('POST','/tenants',{'slug':slug,'name':tenant['name'],'enabled':True,
-                                             'metadata':{'default_workspace':tenant['workspace']}})
+                                             'metadata':{'default_workspace':tenant.get('default_workspace', tenant['workspace'])}})
             if (ROOT/'.local/fixtures.enabled').exists():
                 operator.write('PUT','/tenants/'+slug+'/auth',{'auto_add':False,'providers':['fixture'],'checks':{}})
+        reconcile_default_workspace(operator, tenant)
         users=operator.read('/users?q='+tenant['email'])['data']
         if isinstance(users,dict):users=users.get('users',users.get('items',[]))
         matches=[user for user in users if user['email']==tenant['email']]

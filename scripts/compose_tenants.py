@@ -28,6 +28,9 @@ def validate_tenants(tenants):
         for key in ("name", "email", "workspace"):
             if not isinstance(tenant.get(key), str) or not tenant[key].strip():
                 raise ValueError("Tenant requires " + key)
+        default = tenant.get("default_workspace")
+        if default is not None and (not isinstance(default, str) or not default.strip()):
+            raise ValueError("default_workspace must be a nonempty workspace ID or null")
         if not re.fullmatch(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}", tenant["email"]):
             raise ValueError("Invalid tenant administrator email")
     return tenants
@@ -45,7 +48,10 @@ def select_tenants(root, source=None):
     tenants = validate_tenants(json.loads(Path(source).read_text())) if source else load_tenants(root)
     existing = load_tenants(root)
     if (root / ".local/compose.env").exists() or (root / ".local/tenants.json").exists():
-        if tenants != existing:
+        # Landing-page preference may change; installation identity must not.
+        identity = lambda items: [{k: v for k, v in item.items() if k != "default_workspace"}
+                                  for item in items]
+        if identity(tenants) != identity(existing):
             raise ValueError("Tenant definitions differ from this installation; use a fresh integration directory")
     local = root / ".local"
     local.mkdir(exist_ok=True)
