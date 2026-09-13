@@ -341,7 +341,7 @@ def apply_plan(root, tenant, command, *, restart=True, validate=validate_documen
         lines = [line for line in lines if line.split("=", 1)[0] not in policy]
         atomic_write(env_path, "\n".join(lines + [k + "=" + v for k, v in policy.items()]) + "\n")
         if restart:
-            run(command("up", "-d", "--no-deps", "--force-recreate", "gateway"), root, "Gateway recreation")
+            run(command("up", "-d", "--no-deps", "--force-recreate", "--wait", "--wait-timeout", "120", "gateway"), root, "Gateway recreation")
         return len(records)
 
 

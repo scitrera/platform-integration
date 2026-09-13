@@ -1,10 +1,8 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 import copy
-import importlib.util
 import shutil
 import subprocess
 import json
-import os
 from pathlib import Path
 import sys
 import tempfile
@@ -73,6 +71,13 @@ class ModelsTests(unittest.TestCase):
         self.assertIn('synthetic-secret', plan['credentials'].values())
         for h in provider['default_headers'].values():
             self.assertIn(plan['credential_file'], h['value_from'])
+
+    def test_central_versioning_does_not_mutate_shared_tenant_routes(self):
+        plan = self.compile()
+        updated = models.version_central_model(plan)
+        self.assertEqual(updated['records']['sahara-default'], plan['records']['sahara-default'])
+        self.assertNotEqual(updated['records']['memorylayer-default']['providers'],
+                            plan['records']['memorylayer-default']['providers'])
 
     def test_google_native_auth(self):
         self.doc['models']['review'] = {'provider': 'gemini', 'base_url': 'https://generativelanguage.googleapis.com/v1beta',
@@ -144,7 +149,7 @@ class ModelsTests(unittest.TestCase):
         self.assertEqual(count, 2)
         self.assertEqual(models.read_json(self.canonical), plan['records']['sahara-default'])
         self.assertFalse((self.canonical.parent / 'next-sahara-default.json').exists())
-        self.assertEqual(calls[-1], ['up', '-d', '--no-deps', '--force-recreate', 'gateway'])
+        self.assertEqual(calls[-1], ['up', '-d', '--no-deps', '--force-recreate', '--wait', '--wait-timeout', '120', 'gateway'])
         self.assertIn('review.example.test', (self.root / '.local/compose.env').read_text())
         self.assertIn('# preserve me\nOTHER=keep', (self.root / '.local/compose.env').read_text())
         credential_path = self.root / '.local/gateway' / plan['credential_file']
