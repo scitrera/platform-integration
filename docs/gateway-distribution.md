@@ -27,7 +27,37 @@ File configuration still requires a rollout after replacement. Catalog refresh
 and caller/provider credential rotation have independent semantics. The reference
 uses a single gateway replica; publishing a new distribution does not establish HA.
 
-## Local candidate verified on 2026-09-13
+## Merged upstream base — 2026-09-13
+
+[Upstream PR #1](https://github.com/sparksq/sparkroute/pull/1) is merged. The current
+distribution consumes `v0.0.3-0.20260913194441-410890808ca6`, resolved through
+`proxy.golang.org` and verified with `sum.golang.org`. The upstream publication
+prerequisite is satisfied; the platform distribution repository and images still
+await publication.
+
+| Current input / artifact | Identity |
+| --- | --- |
+| Distribution revision | `7f92f60120439c8bffcbfd347f65585e1c337f33` |
+| Upstream revision | `410890808ca610a05d1935e6ed9fa346d1f05357` |
+| Local Linux arm64 image | `platform-integration/platform-sparkroute:29b5c3c6d5a11a90` |
+| Local Docker image ID | `sha256:a17be5cdf65a10d6072682a8fc0cbaa7ccf01ab4eb7fd1f5a6ad0ac791c73738` |
+| Matching source archive SHA-256 | `710c5c31b191536f8164f9e63a7246329233e93cf5f7fbb124eb481d61f9a25f` |
+
+Vendoring and retained notices were regenerated from the public module. Offline
+race tests, vet, source/dependency integrity checks, and Linux amd64/arm64 builds
+passed with an empty module cache. The container compiled without network access;
+its embedded source and reported upstream identity match the pin above.
+
+Installed Compose catalog concurrency/CAS, provider credential rotation and
+attributed PostgreSQL accounting passed on this refreshed image. Shared and both
+tenant Helm upgrades passed, including migration and catalog publisher jobs; Kind
+passed the same gateway acceptance. Integration chart/lifecycle checks and 24 unit
+tests passed. The installed gateway source download matched its embedded archive.
+The initial browser streaming/cancellation/recovery evidence below belongs to the initial
+candidate; those browser scenarios were not rerun for this dependency refresh.
+The single-replica and synthetic-inference qualification limits remain unchanged.
+
+## Initial local candidate — historical validation on 2026-09-13
 
 | Input / artifact | Identity |
 | --- | --- |
@@ -38,10 +68,11 @@ uses a single gateway replica; publishing a new distribution does not establish 
 | Local Docker image ID | `sha256:7749b80617623dfb29aca59605abe4cafbaea090cca3dbd1e6a646a85693670b` |
 | Matching source archive SHA-256 | `38a33106115786780867f8f08a5968c0d80646e040c120e759e8c778f26f10b3` |
 
-The local upstream commit must be published before a fresh public Go module proxy
-can resolve it. Generated vendoring already supports an independent source build.
-Neither repository nor this image was published by the cutover. A local image ID
-is not a registry manifest digest; `versions.yaml` preserves that distinction.
+At the initial cutover, the upstream commit had not yet been published; generated
+vendoring supplied an independent source build. The merged-base refresh above
+supersedes that upstream publication status. The platform repository and image
+remain unpublished. A local image ID is not a registry manifest digest;
+`versions.yaml` preserves that distinction.
 
 The following checks passed against this candidate:
 
