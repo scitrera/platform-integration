@@ -1,0 +1,42 @@
+{
+  "schema_version": 1,
+  "model": "sahara-default",
+  "virtual_model": {
+    "name": "sahara-default",
+    "response_model": "virtual",
+    "selection": {
+      "mode": "weighted_random"
+    },
+    "pools": [
+      {
+        "priority": 0,
+        "targets": [
+          {
+            "deployment": "review-model",
+            "weight": 100
+          }
+        ]
+      }
+    ]
+  },
+  "providers": [
+    {
+      "name": "google",
+      "type": "gemini",
+      "base_url": "https://generativelanguage.googleapis.com/v1beta",
+      "auth": {
+        "type": "header",
+        "header": "x-goog-api-key",
+        "credential": "file:///run/gateway/provider.json#api_key"
+      }
+    }
+  ],
+  "deployments": [
+    {
+      "name": "review-model",
+      "provider": "google",
+      "model": "YOUR-SERVED-MODEL-ID",
+      "max_concurrency": 2
+    }
+  ]
+}

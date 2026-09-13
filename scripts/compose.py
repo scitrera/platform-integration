@@ -20,6 +20,9 @@ def command(*args):
             '--env-file',str(env),'--env-file',str(images),'-f',str(base)]
     if (ROOT/'.local/fixtures.enabled').exists():
         result += ['-f',str(fixtures)]
+    modal=ROOT/'.local/compose.modal.yaml'
+    if modal.is_file():
+        result += ['-f',str(modal)]
     return result+list(args)
 
 if __name__=='__main__':

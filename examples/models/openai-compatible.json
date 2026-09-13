@@ -1,0 +1,41 @@
+{
+  "schema_version": 1,
+  "model": "sahara-default",
+  "virtual_model": {
+    "name": "sahara-default",
+    "response_model": "virtual",
+    "selection": {
+      "mode": "weighted_random"
+    },
+    "pools": [
+      {
+        "priority": 0,
+        "targets": [
+          {
+            "deployment": "review-model",
+            "weight": 100
+          }
+        ]
+      }
+    ]
+  },
+  "providers": [
+    {
+      "name": "hosted-model",
+      "type": "openai_compatible",
+      "base_url": "https://YOUR-PROVIDER.example/v1",
+      "auth": {
+        "type": "bearer",
+        "credential": "file:///run/gateway/provider.json#api_key"
+      }
+    }
+  ],
+  "deployments": [
+    {
+      "name": "review-model",
+      "provider": "hosted-model",
+      "model": "YOUR-SERVED-MODEL-ID",
+      "max_concurrency": 2
+    }
+  ]
+}

@@ -1,0 +1,45 @@
+{
+  "schema_version": 1,
+  "model": "sahara-default",
+  "virtual_model": {
+    "name": "sahara-default",
+    "response_model": "virtual",
+    "selection": {
+      "mode": "weighted_random"
+    },
+    "pools": [
+      {
+        "priority": 0,
+        "targets": [
+          {
+            "deployment": "review-model",
+            "weight": 100
+          }
+        ]
+      }
+    ]
+  },
+  "providers": [
+    {
+      "name": "modal-bids",
+      "type": "openai_compatible",
+      "base_url": "https://YOUR-ENDPOINT.modal.run/v1",
+      "default_headers": {
+        "Modal-Key": {
+          "value_from": "file:///run/gateway/modal-proxy.json#key"
+        },
+        "Modal-Secret": {
+          "value_from": "file:///run/gateway/modal-proxy.json#secret"
+        }
+      }
+    }
+  ],
+  "deployments": [
+    {
+      "name": "review-model",
+      "provider": "modal-bids",
+      "model": "YOUR-SERVED-MODEL-ID",
+      "max_concurrency": 2
+    }
+  ]
+}

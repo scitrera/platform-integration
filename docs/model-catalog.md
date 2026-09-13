@@ -65,3 +65,17 @@ gatewayFiles is copied into private memory storage by an init container. Changes
 to those file inputs require a gateway rollout. Do not infer hot reload of copied
 files from the native Secret credential test. The one-replica reference gateway
 has no availability guarantee during a rollout.
+
+## Existing hosted endpoints
+
+`examples/models/` provides tenant catalog envelopes for Google Gemini, generic
+OpenAI-compatible endpoints and existing Modal endpoints protected with separate
+`Modal-Key` and `Modal-Secret` header references. The examples contain no secrets.
+Set the actual model ID and provider hostname, store referenced JSON credentials
+under `.local/gateway` with mode 0600, and allowlist the HTTPS provider hostname.
+The selected SparkRoute image validates their routing documents offline with
+`-config-check`; remote authentication and capabilities still require acceptance.
+
+Modal HTTP proxy credentials are separate from the account credentials used for
+[ordinary Modal task orchestration](modal.md). Model-server deployment is managed
+by the endpoint owner.
