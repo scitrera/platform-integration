@@ -18,7 +18,8 @@ distributions retain their upstream terms and embedded notices. Their source is
 not vendored here. The three application charts have no bundled chart dependencies;
 operators are installed separately using the prerequisite lock.
 
-SparkRoute enterprise is an operator-supplied artifact. No enterprise source or
-distribution rights are supplied here. Public SparkRoute core is AGPL-3.0-only.
-The web serving image includes the frontend's matching source archive and notices.
-Local build and execution permission does not establish public distribution rights.
+The gateway is the AGPL-3.0-only `scitrera/platform-sparkroute` distribution of
+public SparkRoute. Its image retains Scitrera LLC and Fox Engine Ltd. copyright
+notices, dependency licenses and its matching source archive. Source and registry
+publication of the prepared candidate remain separate release steps.
+The web serving image likewise includes its matching source archive and notices.

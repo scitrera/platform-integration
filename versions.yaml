@@ -181,19 +181,15 @@ images:
     availability: verified in local Docker engine; registry publication not established
     source_set: aether-42166abdce4a0322
   SPARKROUTE_IMAGE:
-    tag: platform-integration/sparkroute-enterprise:9b918bb79fb071ef
-    local_image_id: sha256:a1bcd5fb7d41c25413cf526e7a69edfb18daabcacf9d06ffb35e7fc7a82a8e11
+    tag: platform-integration/platform-sparkroute:d6466c1919246869
+    local_image_id: sha256:7749b80617623dfb29aca59605abe4cafbaea090cca3dbd1e6a646a85693670b
     os: linux
     architecture: arm64
     registry_manifest_digests: []
-    availability: verified in local Docker engine; registry publication not established
-    source:
-      distribution: operator-supplied permitted enterprise build; private source excluded
-      composition_sha256: 9b918bb79fb071efe75a4407ac3b88ba17fadee7a675e1c5a2560e12ed1b7bd2
-      build_bases:
-        GO_IMAGE: golang:1.26.8-bookworm@sha256:9fdc884aacc3bec89b20ffc69f4bb369c78210e3e4f600387b5128b12c199f81
-        NODE_IMAGE: node:24.13.0-bookworm-slim@sha256:4660b1ca8b28d6d1906fd644abe34b2ed81d15434d26d845ef0aced307cf4b6f
-        RUNTIME_IMAGE: gcr.io/distroless/static-debian12:nonroot@sha256:afa5c872c891853ca7fcf1f12c3edb23f7eeef36189728842dd51042ff57f7ab
+    availability: verified local public-source candidate; repository/image publication
+      pending
+    source_set: platform-sparkroute-d6466c1919246869
+    source_archive_sha256: 38a33106115786780867f8f08a5968c0d80646e040c120e759e8c778f26f10b3
   CODE_BASE_IMAGE:
     tag: platform-integration/code_base:60dece1d39c0b694
     local_image_id: sha256:944c57f76c9ab7d382d1f2ecae719010ca33f53166b9ffc8d89add19f7904f13
@@ -203,6 +199,21 @@ images:
     availability: verified in local Docker engine; registry publication not established
     source_set: platform-backend-60dece1d39c0b694
 source_sets:
+  platform-sparkroute-d6466c1919246869:
+    component: platform-sparkroute
+    repository: https://github.com/scitrera/platform-sparkroute
+    revision: a3feca9b13abb011924ce86ae6f391a3bfab9a7d
+    tracked_content_sha256: d6466c19192468692c22bac05fd355a904c2cdfb7d3b6c1f1ffeb26d28995e8b
+    dirty: false
+    reviewed_file_count: 3073
+    include_untracked: []
+    availability: local AGPL source candidate; publication pending
+    upstream:
+      repository: https://github.com/sparksq/sparkroute
+      revision: 50d267f5f39909bdc6820a0bc908346ada2f7cf4
+      version: v0.0.3-0.20260913184231-50d267f5f399
+      vendored: true
+      availability: local upstream commit; publication pending
   platform-backend-60dece1d39c0b694:
     component: platform-backend
     repository: https://github.com/scitrera/platform-backend

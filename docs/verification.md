@@ -83,8 +83,11 @@ The current compatibility manifest records 19 local runtime/build images from
 six clean component source revisions, with dependency image IDs and the matching
 web source archive. Component changes are maintained upstream; the installation
 does not apply patch snapshots. Local Docker image IDs are not registry manifest
-digests. The permitted SparkRoute enterprise build excludes its source from this
-repository and does not imply permission to redistribute its image.
+digests. Those historical results used the preceding enterprise gateway image.
+The gateway source boundary is now `scitrera/platform-sparkroute`, an AGPL public-source
+candidate consuming a pinned public upstream module. See
+[gateway distribution cutover](gateway-distribution.md) for the replacement
+artifact and its separate validation evidence.
 
 A fresh directory populated only from the reviewed 147-file export passed all
 eight smoke steps: independent configuration, complete installation, browser

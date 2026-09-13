@@ -33,11 +33,18 @@ uses the same Aether revision as the tenant gateway; dependency image IDs are
 recorded explicitly in `.local/images.json`. Web packaging includes its matching
 source archive.
 
-SparkRoute enterprise is a separately permitted input. Use
-scripts/build_sparkroute.py with explicit --enterprise-source and --oss-source
-paths, or record a permitted compatible image as SPARKROUTE_IMAGE. Local testing
-does not establish public availability or a license to redistribute that image.
-The required native catalog interfaces are described in model-catalog.md.
+Build the gateway from the AGPL `scitrera/platform-sparkroute` checkout:
+
+```sh
+python3 scripts/build_sparkroute.py --source /path/to/platform-sparkroute
+```
+
+The distribution vendors its pinned public dependencies and builds without a
+sibling checkout or private source input. The builder checks source/dependency
+integrity and records the distribution revision, content hash, upstream pin and
+image ID. Alternatively, record a compatible platform-sparkroute image as
+`SPARKROUTE_IMAGE`. The local candidate is not yet a published registry artifact.
+The native catalog contracts are described in [model-catalog.md](model-catalog.md).
 
 ## Configure and start
 

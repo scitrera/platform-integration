@@ -16,7 +16,10 @@ External OAuth and real model-provider tests are pending by operator choice.
 Local fixture tests use the real platform services and allocation providers.
 
 The installation consumes independent component artifacts. Local source builds
-accept explicit paths and record input hashes. SparkRoute enterprise is a
-separately permitted operator input; local verification does not establish public
-artifact availability. No original monorepo, private administration application,
-hosted fleet state or ArgoCD is an installation prerequisite.
+accept explicit paths and record input hashes. The gateway uses the AGPL
+`scitrera/platform-sparkroute` distribution, with its pinned public SparkRoute
+base and vendored dependencies. Its local candidate builds from one repository;
+registry publication is separate from local verification. See the
+[gateway distribution and verification record](docs/gateway-distribution.md).
+No original monorepo, private administration application, hosted fleet state or
+ArgoCD is an installation prerequisite.
