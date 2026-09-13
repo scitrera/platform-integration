@@ -4,12 +4,16 @@ import json
 from pathlib import Path
 import secrets
 from configure import create
+from models import managed
 
 ROOT=Path(__file__).resolve().parents[1]
 env=dict(line.split('=',1) for line in (ROOT/'.local/compose.env').read_text().splitlines() if line and not line.startswith('#'))
 # These settings are confined to the explicitly selected local fixture profile.
 for key,value in {"MODEL_PROVIDER_HOSTS":"inference","MODEL_PROVIDER_ALLOW_HTTP":"true",
                   "EMBED_ENDPOINT":"http://inference:8080"}.items():
+    if key.startswith("MODEL_PROVIDER_") and managed(ROOT):
+        env.setdefault(key, value)
+        continue
     if key in env and env[key] != value:
         raise SystemExit("Existing "+key+" differs from fixture policy; choose a separate installation directory")
     env[key]=value

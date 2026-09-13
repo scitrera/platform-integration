@@ -1,5 +1,9 @@
 # Tenant model catalog
 
+For Compose installations, [YAML model configuration](model-yaml.md) automates the
+record generation, credential files, host policy and guarded publication described
+below. Use the owner CLI directly for reconciliation or advanced routing policies.
+
 Sahara aliases are durable records in each tenant's Aether global KV. SparkRoute's
 native Aether resolver reads those records with a separate read-only service
 identity. Central SparkRoute configuration retains shared policies and the
