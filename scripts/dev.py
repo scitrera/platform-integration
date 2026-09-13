@@ -74,7 +74,11 @@ def main():
     run(command("config","--quiet"))
     run(command("up","-d","auth"))
     run([sys.executable,str(ROOT/"scripts/auth_setup.py")])
+    from models import apply_staged
+    model_routes = apply_staged(ROOT, command)
     run(command("up","-d"))
+    if model_routes:
+        run(command("up", "-d", "--no-deps", "--force-recreate", "gateway"))
     wait_ready()
     print("Compose services and dependency jobs are ready. External OAuth/provider acceptance remains separate.")
 

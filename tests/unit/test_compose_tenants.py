@@ -88,6 +88,24 @@ class ComposeTenantChecks(unittest.TestCase):
                 select_tenants(root, source)
             self.assertEqual(load_tenants(root), [self.tenant])
 
+    def test_only_landing_preference_can_change_in_an_existing_installation(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            (root / '.local').mkdir()
+            (root / '.local/tenants.json').write_text(json.dumps([self.tenant]))
+            source = root / 'tenants.json'
+            changed = dict(self.tenant, default_workspace=None)
+            source.write_text(json.dumps([changed]))
+            self.assertEqual(select_tenants(root, source), [changed])
+            source.write_text(json.dumps([dict(changed, workspace='different')]))
+            with self.assertRaisesRegex(ValueError, 'fresh integration directory'):
+                select_tenants(root, source)
+
+    def test_landing_preference_rejects_malformed_values(self):
+        for value in ['', False, 1, []]:
+            with self.subTest(value=value), self.assertRaisesRegex(ValueError, 'default_workspace'):
+                validate_tenants([dict(self.tenant, default_workspace=value)])
+
     def test_compose_uses_generated_files_and_refuses_missing_tenant_config(self):
         with tempfile.TemporaryDirectory() as folder:
             root = Path(folder)

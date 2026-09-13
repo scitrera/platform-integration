@@ -151,3 +151,22 @@ configuration and operator API; do not write its tables directly. Supply explici
 model provider host allowlists and embedding endpoints. The local fixture overlay
 must be disabled for an external-provider run. Certificate generation is for
 disposable development only and has a 30-day lifetime.
+
+Customer overlays can set `TENANT_SETUP_MINIMAL=true` on their `catalog-<tenant>` job to provision reserved workspaces, administrative infrastructure and agents without registering or globally installing the standard application catalog. The default remains the full catalog. Customer provisioning can then register its own applications. Existing app assignments are not removed by this bootstrap setting; reconcile them through the application APIs when migrating an existing tenant.
+
+
+### Workspace landing preferences
+
+Tenant definitions accept optional `default_workspace`: a workspace ID, or `null`
+for no configured landing workspace. If omitted, new tenants use `workspace` as
+before. The `workspace` field remains bootstrap configuration; changing the
+landing preference does not delete workspace data. `select_tenants` permits
+updating only this preference in an existing installation while retaining its
+identity guard for other fields. `scripts/auth_setup.py` applies explicit
+preferences to existing tenants through the operator API, preserving their name,
+enabled state and other editable metadata.
+
+To show a picker instead of selecting the first accessible workspace, also set
+tenant `uiConfig.autoSelectWorkspace=false` using platform provisioning. The
+frontend defaults this flag to true for existing deployments. Direct workspace
+URLs remain explicit selections.

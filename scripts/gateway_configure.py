@@ -7,6 +7,7 @@ from pathlib import Path
 from compose_tenants import load_tenants
 import secrets
 from configure import create, certificate
+from models import managed
 
 ROOT=Path(__file__).resolve().parents[1]
 
@@ -67,6 +68,9 @@ def main():
                 'deployments':[entry for entry in config['deployments'] if entry['name']=='fixture']}
             create(ROOT/'.local'/slug/'model-catalog'/(model['name']+'.json'),json.dumps(record,indent=2)+'\n',0o644)
     config_path=ROOT/'.local/gateway/config.json'
+    if config_path.exists() and args.extend_existing and managed(ROOT):
+        print("Prepared gateway principals; YAML-managed routing retained.")
+        return
     if config_path.exists() and args.extend_existing:
         existing=json.loads(config_path.read_text())
         if existing['providers']!=config['providers'] or existing['deployments']!=config['deployments']:
