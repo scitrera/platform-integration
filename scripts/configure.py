@@ -9,6 +9,7 @@ import secrets
 import subprocess
 
 from compose_tenants import select_tenants, write_compose
+from compose_network import network_settings
 
 ROOT = Path(__file__).resolve().parents[1]
 LOCAL = ROOT / '.local'
@@ -195,6 +196,9 @@ def main():
     parser.add_argument('--project', default='platform-integration')
     parser.add_argument('--tenants', type=Path, help='Tenant JSON definitions for a fresh installation')
     parser.add_argument('--web-port', type=int, default=18080)
+    parser.add_argument('--bind-address', help='Browser service bind IPv4 address; default 127.0.0.1')
+    parser.add_argument('--public-origin', help='Browser-facing web origin, e.g. http://dev-host:18080')
+    parser.add_argument('--fixture-public-origin', help='Browser-facing fixture identity provider origin')
     parser.add_argument('--admin-port', type=int, default=18082)
     parser.add_argument('--fixture-idp-port', type=int, default=18090)
     args = parser.parse_args()
@@ -212,6 +216,9 @@ def main():
     if (LOCAL/'compose.env').exists():
         env.update(dict(line.split('=',1) for line in (LOCAL/'compose.env').read_text().splitlines()
                         if line and not line.startswith('#')))
+    env.update(network_settings(env, initialized=(LOCAL/'compose.env').exists(),
+        bind_address=args.bind_address, public_origin=args.public_origin,
+        fixture_public_origin=args.fixture_public_origin))
     for key in ('STORAGE_PASSWORD','OBJECT_PASSWORD','SPARKROUTE_PASSWORD'):
         env.setdefault(key,secrets.token_hex(24))
     env.setdefault('EDGE_SIGNING_SEED',secrets.token_hex(32))

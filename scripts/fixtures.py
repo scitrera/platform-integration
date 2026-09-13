@@ -17,7 +17,7 @@ path=ROOT/'.local/compose.env'
 path.write_text(''.join(k+'='+v+'\n' for k,v in env.items()))
 path.chmod(0o600)
 secret=secrets.token_hex(24)
-web='http://127.0.0.1:'+env['WEB_PORT']
+web=env.get('PUBLIC_ORIGIN', 'http://127.0.0.1:'+env['WEB_PORT'])
 create(ROOT/'.local/fixture.env','FIXTURE_CLIENT_SECRET='+secret+'\n')
 secret=dict(line.split('=',1) for line in (ROOT/'.local/fixture.env').read_text().splitlines())['FIXTURE_CLIENT_SECRET']
 create(ROOT/'.local/oauth.env','\n'.join([

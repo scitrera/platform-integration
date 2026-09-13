@@ -93,6 +93,20 @@ Use a separate checkout/directory for that installation. Changing arguments does
 not replace an existing .local/compose.env or rotate existing credentials.
 Fixture policy refuses conflicting provider settings.
 
+## LAN browser access
+
+For a fresh installation, bind the browser-facing services and set their public
+origin together:
+
+    python3 scripts/configure.py --bind-address 0.0.0.0 --public-origin http://dev-host:18080
+
+The fixture identity provider uses the same hostname on the configured fixture
+port (18090 by default); override `--fixture-public-origin` when needed. Both web
+and fixture ports must be reachable by the browser. OAuth callbacks, post-login
+redirects, WebSocket origin checks, and public upload/download URLs use this
+origin. The operator dashboard remains bound to loopback. Existing installations
+retain their addresses; choose a fresh directory to change their browser origins.
+
 ## Verification and daily operation
 
     python3 scripts/compose.py ps

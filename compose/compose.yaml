@@ -79,9 +79,9 @@ services:
       SCITRERA_AUTH_ADMIN_ADDR: :8082
       SCITRERA_AUTH_ADMIN_ORIGIN: http://127.0.0.1:${AUTH_ADMIN_PORT:-18082}
       SCITRERA_AUTH_ADMIN_TOKEN_FILE: /run/auth/operators.json
-      SCITRERA_AUTH_POST_LOGIN_TARGET: http://127.0.0.1:${WEB_PORT:-18080}
-      SCITRERA_AUTH_ALLOWED_REDIRECT_HOSTS: 127.0.0.1
-      SCITRERA_AUTH_CHECKZ_ALLOWED_ORIGINS: http://127.0.0.1:${WEB_PORT:-18080}
+      SCITRERA_AUTH_POST_LOGIN_TARGET: ${PUBLIC_ORIGIN:-http://127.0.0.1:${WEB_PORT:-18080}}
+      SCITRERA_AUTH_ALLOWED_REDIRECT_HOSTS: ${PUBLIC_HOSTNAME:-127.0.0.1}
+      SCITRERA_AUTH_CHECKZ_ALLOWED_ORIGINS: ${PUBLIC_ORIGIN:-http://127.0.0.1:${WEB_PORT:-18080}}
       AUTH_PROXY_SESSION_COOKIE_SECURE: 'false'
     depends_on:
       auth-migrate:
@@ -96,7 +96,7 @@ services:
   web:
     image: ${WEB_IMAGE:?Run build.py}
     ports:
-    - 127.0.0.1:${WEB_PORT:-18080}:8080
+    - ${WEB_BIND_ADDRESS:-127.0.0.1}:${WEB_PORT:-18080}:8080
     volumes:
     - ../.local/nginx.conf:/etc/nginx/nginx.conf:ro
     networks:
@@ -200,7 +200,7 @@ services:
       AETHER_ANON_TLS_CLIENT_CERT: /run/anonymous/tls.crt
       AETHER_ANON_TLS_CLIENT_KEY: /run/anonymous/tls.key
       AETHER_MAX_RECONNECT_ATTEMPTS: '0'
-      WS_ALLOWED_ORIGINS: http://127.0.0.1:${WEB_PORT:-18080}
+      WS_ALLOWED_ORIGINS: ${PUBLIC_ORIGIN:-http://127.0.0.1:${WEB_PORT:-18080}}
       SAHARA_IMAGE: ${SAHARA_IMAGE:?Run build.py}
       SAHARA_CODE_SIDECAR_IMAGE: ${CODE_IMAGE:?Run build.py}
       LLM_GATEWAY_AUTH_MODE: bearer
@@ -310,7 +310,7 @@ services:
       AETHER_ANON_TLS_CLIENT_CERT: /run/anonymous/tls.crt
       AETHER_ANON_TLS_CLIENT_KEY: /run/anonymous/tls.key
       AETHER_MAX_RECONNECT_ATTEMPTS: '0'
-      WS_ALLOWED_ORIGINS: http://127.0.0.1:${WEB_PORT:-18080}
+      WS_ALLOWED_ORIGINS: ${PUBLIC_ORIGIN:-http://127.0.0.1:${WEB_PORT:-18080}}
       SAHARA_IMAGE: ${SAHARA_IMAGE:?Run build.py}
       SAHARA_CODE_SIDECAR_IMAGE: ${CODE_IMAGE:?Run build.py}
       LLM_GATEWAY_AUTH_MODE: bearer
@@ -665,11 +665,11 @@ services:
       DC_BLOB_TYPE: blobgw
       DC_BLOBGW_URL: http://blobgw:8080
       DC_BLOBGW_EDGE_URL: http://storage-edge:8090
-      DC_BLOBGW_EDGE_PUBLIC_URL: http://127.0.0.1:${WEB_PORT}/storage/alpha
+      DC_BLOBGW_EDGE_PUBLIC_URL: ${PUBLIC_ORIGIN:-http://127.0.0.1:${WEB_PORT}}/storage/alpha
       DC_BLOBGW_DOWNLOAD_REQUIRE_AUTH: 'true'
       DC_BLOBGW_DOMAIN: alpha
       MEMORYLAYER_OTEL_ENABLED: 'false'
-      DC_BLOBGW_UPLOAD_PUBLIC_URL: http://127.0.0.1:${WEB_PORT}/storage/alpha/uploads
+      DC_BLOBGW_UPLOAD_PUBLIC_URL: ${PUBLIC_ORIGIN:-http://127.0.0.1:${WEB_PORT}}/storage/alpha/uploads
       DC_BLOBGW_FETCH_BASE_URL: http://storage-download:8080
       DC_BLOBGW_UPLOAD_INTERNAL_URL: http://storage-download:8080/uploads
     networks:
@@ -990,11 +990,11 @@ services:
       DC_BLOB_TYPE: blobgw
       DC_BLOBGW_URL: http://blobgw:8080
       DC_BLOBGW_EDGE_URL: http://storage-edge:8090
-      DC_BLOBGW_EDGE_PUBLIC_URL: http://127.0.0.1:${WEB_PORT}/storage/beta
+      DC_BLOBGW_EDGE_PUBLIC_URL: ${PUBLIC_ORIGIN:-http://127.0.0.1:${WEB_PORT}}/storage/beta
       DC_BLOBGW_DOWNLOAD_REQUIRE_AUTH: 'true'
       DC_BLOBGW_DOMAIN: beta
       MEMORYLAYER_OTEL_ENABLED: 'false'
-      DC_BLOBGW_UPLOAD_PUBLIC_URL: http://127.0.0.1:${WEB_PORT}/storage/beta/uploads
+      DC_BLOBGW_UPLOAD_PUBLIC_URL: ${PUBLIC_ORIGIN:-http://127.0.0.1:${WEB_PORT}}/storage/beta/uploads
       DC_BLOBGW_FETCH_BASE_URL: http://storage-download:8080
       DC_BLOBGW_UPLOAD_INTERNAL_URL: http://storage-download:8080/uploads
     networks:
@@ -1647,7 +1647,7 @@ services:
       AETHER_USER_TLS_CLIENT_KEY: /run/user-tls/tls.key
       TOOLS_WSS_AUTH_PROXY_URL: http://aether-alpha:8082
       TOOLS_WSS_REGISTRY_WORKSPACE: default
-      TOOLS_WSS_ALLOWED_ORIGINS: http://127.0.0.1:${WEB_PORT:-18080}
+      TOOLS_WSS_ALLOWED_ORIGINS: ${PUBLIC_ORIGIN:-http://127.0.0.1:${WEB_PORT:-18080}}
       SCITRERA_TOOL_HOST_ACCESS_POLICY: private
       LOG_LEVEL: info
       TOOLS_WSS_AUTH_WORKSPACE: default
@@ -1679,7 +1679,7 @@ services:
       AETHER_USER_TLS_CLIENT_KEY: /run/user-tls/tls.key
       TOOLS_WSS_AUTH_PROXY_URL: http://aether-beta:8082
       TOOLS_WSS_REGISTRY_WORKSPACE: default
-      TOOLS_WSS_ALLOWED_ORIGINS: http://127.0.0.1:${WEB_PORT:-18080}
+      TOOLS_WSS_ALLOWED_ORIGINS: ${PUBLIC_ORIGIN:-http://127.0.0.1:${WEB_PORT:-18080}}
       SCITRERA_TOOL_HOST_ACCESS_POLICY: private
       LOG_LEVEL: info
       TOOLS_WSS_AUTH_WORKSPACE: default
