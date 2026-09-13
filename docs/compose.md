@@ -144,3 +144,5 @@ configuration and operator API; do not write its tables directly. Supply explici
 model provider host allowlists and embedding endpoints. The local fixture overlay
 must be disabled for an external-provider run. Certificate generation is for
 disposable development only and has a 30-day lifetime.
+
+Customer overlays can set `TENANT_SETUP_MINIMAL=true` on their `catalog-<tenant>` job to provision reserved workspaces, administrative infrastructure and agents without registering or globally installing the standard application catalog. The default remains the full catalog. Customer provisioning can then register its own applications. Existing app assignments are not removed by this bootstrap setting; reconcile them through the application APIs when migrating an existing tenant.

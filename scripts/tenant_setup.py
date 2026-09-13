@@ -18,7 +18,8 @@ async def setup():
     try:
         ml=MemoryLayerClient(aether_client=client,tenant_id=tenant,aether_target='sv::memorylayer')
         ti=TenantInterface2(tenant=tenant,aether_client=client,ml_client=ml)
-        await setup_ti2(ti,client,os.environ.get('ADMIN_EMAIL',''),minimal=False,
+        await setup_ti2(ti,client,os.environ.get('ADMIN_EMAIL',''),
+                        minimal=os.environ.get('TENANT_SETUP_MINIMAL')=='true',
                         seed_dev_admin=os.environ.get('SEED_DEV_ADMIN')=='true')
         workspaces=await ml.list_workspaces()
         actual={entry['id'] for entry in workspaces}
