@@ -99,3 +99,30 @@ image records. No private monorepo or incidental runtime configuration was copie
 See acceptance.md for reproducible fixture commands and operations.md for the
 tested recovery procedures. Upstream code review status is recorded in upstream.md. Registry publication and
 production deployment were not performed.
+
+## Auth-go v0.1.3 — 15 September 2026
+
+`versions.yaml` selects the published
+[auth-go v0.1.3 release](https://github.com/scitrera/scitrera-auth-go/releases/tag/v0.1.3)
+with source commit `a0e6259e56bf022f04f81236de4585fdf3fd6c57` and image
+`ghcr.io/scitrera/scitrera-auth-go:0.1.3@sha256:4debc51c5af88af52a4a31a1ff350b67ea47cd7c9d554f8345f1c67bf0a8b319`.
+The annotated release tag was verified against GitHub; the image's revision and
+version labels match. The release index contains Linux amd64 and arm64 manifests.
+The downloaded arm64 binary reports version 0.1.3.
+
+The shared `tests/integration/auth_config.py` test passed against that published
+image and disposable PostgreSQL 17.11, using JGL's exact tenant/domain/claim
+configuration supplied from its customer repository. It verified tenant creation,
+auth/domain readback, no-op reapplication without revision changes, domain
+replacement, stale-revision and domain-ownership conflicts, safe partial tenant
+state, and CLI plan/apply. No users were created. All owned test containers and
+their dedicated network were removed afterward.
+
+`scripts/check.py` passed the manifest and Python syntax checks, all chart phase
+renders and digest-refusal checks, and all 60 integration unit tests. Runtime
+verification was on Linux arm64; amd64 publication was inspected but not executed.
+The unchanged operator API needs no customer-policy migration for this update.
+Existing installation image manifests remain explicit operator selections;
+[select the pinned release](compose.md#select-artifacts) when updating them.
+No existing installation was restarted by this verification, and no live OAuth
+login was performed.

@@ -154,13 +154,20 @@ images:
     availability: verified in local Docker engine; registry publication not established
     source_set: memorylayer-storage-88274bd9b3fa5b7d
   AUTH_IMAGE:
-    tag: platform-integration/auth:e566e1b2af578861
-    local_image_id: sha256:44ef845a483ad02390bb7593c33558f1a6c7fab86463be08729958bc6582c6c1
+    tag: ghcr.io/scitrera/scitrera-auth-go:0.1.3@sha256:4debc51c5af88af52a4a31a1ff350b67ea47cd7c9d554f8345f1c67bf0a8b319
+    version: 0.1.3
+    local_image_id: sha256:c1ce2824a0073d604432a90d2b79061f204e934d030518ad820fb7cc11021561
     os: linux
     architecture: arm64
-    registry_manifest_digests: []
-    availability: verified in local Docker engine; registry publication not established
-    source_set: auth-go-e566e1b2af578861
+    registry_manifest_digests:
+    - sha256:4debc51c5af88af52a4a31a1ff350b67ea47cd7c9d554f8345f1c67bf0a8b319
+    platform_manifest_digests:
+      linux/amd64: sha256:0e7780454ef4ba2238e403f403456013d71c42fcd84ff8ebc89d907d418d81c8
+      linux/arm64: sha256:076497547918267f9d9f3dab6107d2e06e05e4188ddca522b5843655ac836508
+    availability: Published GHCR release; index and both platform manifests verified;
+      runtime tested on linux/arm64
+    verified_date: '2026-09-15'
+    source_set: auth-go-dd4d9dc5b6ee2252
   WEB_IMAGE:
     tag: platform-integration/web:16ef11e56db7a401
     local_image_id: sha256:a5c1b8c971d4ca9d1eca08cd9333e5b1fc61e95cdb9c527b0f836d2c92cdd25e
@@ -244,15 +251,18 @@ source_sets:
     include_untracked: []
     availability: upstream source available anonymously
     upstream_pr: https://github.com/scitrera/memorylayer-storage/pull/1
-  auth-go-e566e1b2af578861:
+  auth-go-dd4d9dc5b6ee2252:
     component: auth-go
     repository: https://github.com/scitrera/scitrera-auth-go
-    revision: eb50916f302772bdd0a82fe642c08f40f2b3a183
-    tracked_content_sha256: e566e1b2af578861408ed76f9164d193648f98df76d088c50a64ae125b1a89cc
+    revision: a0e6259e56bf022f04f81236de4585fdf3fd6c57
+    release: v0.1.3
+    release_url: https://github.com/scitrera/scitrera-auth-go/releases/tag/v0.1.3
+    tracked_content_sha256: dd4d9dc5b6ee22525f3c85c585562a91f3767284187ae3e924229e01429cf6dd
     dirty: false
-    reviewed_file_count: 316
+    reviewed_file_count: 317
     include_untracked: []
-    availability: upstream source available anonymously
+    availability: Published release tag verified against GitHub and image revision
+      label
   platform-frontend-16ef11e56db7a401:
     component: platform-frontend
     repository: https://github.com/scitrera/platform-frontend

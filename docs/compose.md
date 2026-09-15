@@ -27,6 +27,21 @@ Local development with uncommitted changes remains available through explicit
 `--allow-dirty` and `--include-untracked` options. Supply an already built image
 with `--use-image KEY=TAG` to record its ID without claiming source provenance.
 
+Auth uses the published **auth-go v0.1.3** image, pinned by its multi-architecture
+registry digest in `versions.yaml`. Select that release without a local auth build:
+
+```sh
+auth_image_ref="$(python3 -c 'import yaml; print(yaml.safe_load(open("versions.yaml"))["images"]["AUTH_IMAGE"]["tag"])')"
+docker pull "$auth_image_ref"
+python3 scripts/build.py --use-image "AUTH_IMAGE=$auth_image_ref"
+```
+
+This records the selected image in the installation manifest. Existing
+installations retain their image selection until this command is run; changing
+`versions.yaml` alone does not restart services or replace `.local/images.json`.
+The release index includes Linux amd64 and arm64. See the
+[auth release verification](verification.md#auth-go-v013--15-september-2026).
+
 Build `AETHER_IMAGE` before `SIDECAR_IMAGE` and `CODE_BASE_IMAGE` before
 `CODE_IMAGE`. One checkout per component now supplies all its images. The sidecar
 uses the same Aether revision as the tenant gateway; dependency image IDs are
