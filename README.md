@@ -4,6 +4,8 @@ Docker Compose development installation and shared, storage and tenant Helm
 charts for the Scitrera platform.
 
 - [Compose installation](docs/compose.md)
+- [Tenant auth configuration](docs/tenant-auth.md)
+- [Customer repository setup](docs/customer-repositories.md)
 - [Helm prerequisites, configuration and phase commands](docs/helm.md)
 - [State, backup and recovery](docs/operations.md)
 - [Actual verification results and remaining gates](docs/verification.md)

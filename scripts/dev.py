@@ -2,19 +2,21 @@
 """Run the disposable Compose profile with public component bootstrap commands."""
 import argparse
 import json
+from functools import partial
 import os
 from pathlib import Path
 import subprocess
 import sys
 import time
-from compose import command
+from compose import command as base_command
 
 ROOT=Path(__file__).resolve().parents[1]
 
 def run(args):
     subprocess.run(args,cwd=ROOT,check=True)
 
-def wait_ready(timeout=600):
+def wait_ready(timeout=600, *, compose_command=None):
+    command = compose_command or base_command
     config=json.loads(subprocess.check_output(command("config","--format","json"),cwd=ROOT,text=True))
     services=config["services"]
     jobs={name for name,service in services.items()
@@ -43,11 +45,14 @@ def wait_ready(timeout=600):
         if time.monotonic()>deadline:raise RuntimeError("Readiness deadline exceeded: "+", ".join(sorted(waiting)))
         time.sleep(1)
 
-def main():
+def main(argv=None):
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument("action",choices=["up","stop","start","down"])
     parser.add_argument("--fixtures",action="store_true",help="Select synthetic OAuth and inference")
-    args=parser.parse_args()
+    parser.add_argument("--overlay", type=Path, action="append", default=[],
+                        help="Customer Compose overlay, applied after generated/fixture/Modal files; repeatable")
+    args=parser.parse_args(argv)
+    command = partial(base_command, overlays=args.overlay)
     if args.action in ("stop","start","down"):
         if args.action in ("stop","down"):
             config=json.loads(subprocess.check_output(command("config","--format","json"),cwd=ROOT,text=True))
@@ -56,7 +61,7 @@ def main():
             if allocated:
                 parser.error("Release this project's allocated sandboxes through sandbox_release.py before "+args.action)
         run(command(args.action))
-        if args.action=="start":wait_ready()
+        if args.action=="start":wait_ready(compose_command=command)
         return
     if not (ROOT/".local/images.json").is_file():
         parser.error("Build or supply selected images first; see docs/compose.md")
@@ -79,7 +84,7 @@ def main():
     run(command("up","-d"))
     if model_routes:
         run(command("up", "-d", "--no-deps", "--force-recreate", "gateway"))
-    wait_ready()
+    wait_ready(compose_command=command)
     print("Compose services and dependency jobs are ready. External OAuth/provider acceptance remains separate.")
 
 if __name__=="__main__":main()

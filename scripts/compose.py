@@ -6,7 +6,7 @@ import sys
 
 ROOT=Path(__file__).resolve().parents[1]
 
-def command(*args):
+def command(*args, overlays=()):
     env=ROOT/'.local/compose.env'
     images=ROOT/'.local/images.env'
     if not env.is_file() or not images.is_file():
@@ -23,6 +23,11 @@ def command(*args):
     modal=ROOT/'.local/compose.modal.yaml'
     if modal.is_file():
         result += ['-f',str(modal)]
+    for overlay in overlays:
+        overlay = Path(overlay).resolve()
+        if not overlay.is_file():
+            raise ValueError("Compose overlay does not exist: " + str(overlay))
+        result += ['-f', str(overlay)]
     return result+list(args)
 
 if __name__=='__main__':

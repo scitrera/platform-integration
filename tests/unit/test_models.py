@@ -201,9 +201,9 @@ class ModelsTests(unittest.TestCase):
             events.append('apply')
             return 4
         with patch.object(dev, 'ROOT', self.root), patch.object(sys, 'argv', ['dev.py', 'up']), \
-                patch.object(dev, 'command', lambda *a: list(a)), \
+                patch.object(dev, 'base_command', lambda *a, **kwargs: list(a)), \
                 patch.object(dev, 'run', lambda args: events.append(args)), \
-                patch.object(dev, 'wait_ready', lambda: events.append('ready')), \
+                patch.object(dev, 'wait_ready', lambda **kwargs: events.append('ready')), \
                 patch.object(models, 'apply_staged', apply):
             dev.main()
         self.assertLess(events.index('apply'), events.index(['up', '-d']))
