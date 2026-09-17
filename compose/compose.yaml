@@ -599,6 +599,10 @@ services:
       MEMORYLAYER_RATE_LIMIT_REQUESTS: '10000'
       MEMORYLAYER_DATA_DIR: /home/memorylayer
       MEMORYLAYER_BLOB_STORAGE_BASE_PATH: /home/memorylayer/blobs
+      # Canonical page files use direct HTTP storage; Aether carries descriptors.
+      MEMORYLAYER_SOURCE_FILES_BLOB_URL: http://blobgw:8080
+      MEMORYLAYER_SOURCE_FILES_EDGE_URL: http://storage-edge:8090
+      MEMORYLAYER_SOURCE_FILES_FETCH_URL: http://storage-download:8080
       MEMORYLAYER_TENANT_ID: alpha
       MEMORYLAYER_LLM_PROFILE_DEFAULT_PROVIDER: openai
       MEMORYLAYER_LLM_PROFILE_DEFAULT_MODEL: memorylayer-default
@@ -924,6 +928,10 @@ services:
       MEMORYLAYER_RATE_LIMIT_REQUESTS: '10000'
       MEMORYLAYER_DATA_DIR: /home/memorylayer
       MEMORYLAYER_BLOB_STORAGE_BASE_PATH: /home/memorylayer/blobs
+      # Canonical page files use direct HTTP storage; Aether carries descriptors.
+      MEMORYLAYER_SOURCE_FILES_BLOB_URL: http://blobgw:8080
+      MEMORYLAYER_SOURCE_FILES_EDGE_URL: http://storage-edge:8090
+      MEMORYLAYER_SOURCE_FILES_FETCH_URL: http://storage-download:8080
       MEMORYLAYER_TENANT_ID: beta
       MEMORYLAYER_LLM_PROFILE_DEFAULT_PROVIDER: openai
       MEMORYLAYER_LLM_PROFILE_DEFAULT_MODEL: memorylayer-default
