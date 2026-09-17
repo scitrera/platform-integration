@@ -57,6 +57,18 @@ class ComposeTenantChecks(unittest.TestCase):
         self.assertIn('$platform_customer_one', nginx([self.tenant]))
         self.assertNotIn('$platform_customer-one', nginx([self.tenant]))
 
+    def test_customer_source_downloads_have_matching_tenant_and_routes(self):
+        rendered = render_compose(yaml.safe_load((ROOT / 'compose/compose.yaml').read_text()), [self.tenant])
+        services = rendered['services']
+        ml = services['memorylayer-customer-one']['environment']
+        self.assertEqual(ml['MEMORYLAYER_TENANT_ID'], 'customer-one')
+        fetch = ml['MEMORYLAYER_SOURCE_FILES_FETCH_URL']
+        for service in ['bridge-customer-one', 'provider-customer-one']:
+            self.assertEqual(services[service]['environment']['SANDBOX_BLOB_FETCH_BASE_URL'], fetch)
+        # The dynamically resolved tenant API must be reachable from the restricted proxy.
+        self.assertIn('tenant-customer-one', services['storage-download']['networks'])
+        self.assertIn('tenant-customer-one', services['memorylayer-customer-one']['networks'])
+
     def test_upload_auth_subrequest_does_not_reapply_default_body_limit(self):
         config = nginx([self.tenant])
         verify = config.split('location = /_verify_customer-one {', 1)[1].split('}', 1)[0]

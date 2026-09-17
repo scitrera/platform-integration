@@ -600,8 +600,6 @@ services:
       MEMORYLAYER_DATA_DIR: /home/memorylayer
       MEMORYLAYER_BLOB_STORAGE_BASE_PATH: /home/memorylayer/blobs
       # Canonical page files use direct HTTP storage; Aether carries descriptors.
-      MEMORYLAYER_SOURCE_FILES_BLOB_URL: http://blobgw:8080
-      MEMORYLAYER_SOURCE_FILES_EDGE_URL: http://storage-edge:8090
       MEMORYLAYER_SOURCE_FILES_FETCH_URL: http://storage-download:8080
       MEMORYLAYER_TENANT_ID: alpha
       MEMORYLAYER_LLM_PROFILE_DEFAULT_PROVIDER: openai
@@ -753,6 +751,8 @@ services:
       LOGGING_LEVEL: INFO
       AETHER_MAX_RECONNECT_ATTEMPTS: '0'
       AETHER_GATEWAY_ADDR: aether-alpha:50051
+      SANDBOX_BLOB_FETCH_BASE_URL: http://storage-download:8080
+      SANDBOX_BLOB_UPLOAD_BASE_URL: http://storage-download:8080/uploads
       PLATFORM_BRIDGE_SEMANTIC_TOOL_SEARCH: 'false'
       SCITRERA_WORK_PROFILES_FILE: /run/work-profiles.json
       LLM_GATEWAY_AUTH_MODE: bearer
@@ -806,6 +806,7 @@ services:
       AETHER_SERVER_ADDR: aether-alpha:50051
       SANDBOX_TENANT_ID: alpha
       SANDBOX_PROVIDER: docker
+      SANDBOX_BLOB_FETCH_BASE_URL: http://storage-download:8080
       SANDBOX_SERVICE_SPECIFIER: alpha
       SANDBOX_IMAGE: ${SAHARA_IMAGE}
       SANDBOX_SIDECAR_IMAGE: ${SIDECAR_IMAGE}
@@ -929,8 +930,6 @@ services:
       MEMORYLAYER_DATA_DIR: /home/memorylayer
       MEMORYLAYER_BLOB_STORAGE_BASE_PATH: /home/memorylayer/blobs
       # Canonical page files use direct HTTP storage; Aether carries descriptors.
-      MEMORYLAYER_SOURCE_FILES_BLOB_URL: http://blobgw:8080
-      MEMORYLAYER_SOURCE_FILES_EDGE_URL: http://storage-edge:8090
       MEMORYLAYER_SOURCE_FILES_FETCH_URL: http://storage-download:8080
       MEMORYLAYER_TENANT_ID: beta
       MEMORYLAYER_LLM_PROFILE_DEFAULT_PROVIDER: openai
@@ -1082,6 +1081,8 @@ services:
       LOGGING_LEVEL: INFO
       AETHER_MAX_RECONNECT_ATTEMPTS: '0'
       AETHER_GATEWAY_ADDR: aether-beta:50051
+      SANDBOX_BLOB_FETCH_BASE_URL: http://storage-download:8080
+      SANDBOX_BLOB_UPLOAD_BASE_URL: http://storage-download:8080/uploads
       PLATFORM_BRIDGE_SEMANTIC_TOOL_SEARCH: 'false'
       SCITRERA_WORK_PROFILES_FILE: /run/work-profiles.json
       LLM_GATEWAY_AUTH_MODE: bearer
@@ -1135,6 +1136,7 @@ services:
       AETHER_SERVER_ADDR: aether-beta:50051
       SANDBOX_TENANT_ID: beta
       SANDBOX_PROVIDER: docker
+      SANDBOX_BLOB_FETCH_BASE_URL: http://storage-download:8080
       SANDBOX_SERVICE_SPECIFIER: beta
       SANDBOX_IMAGE: ${SAHARA_IMAGE}
       SANDBOX_SIDECAR_IMAGE: ${SIDECAR_IMAGE}
