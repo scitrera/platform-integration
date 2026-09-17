@@ -66,7 +66,7 @@ class ComposeTenantChecks(unittest.TestCase):
         self.assertIn('proxy_set_header Content-Length "";', verify)
         uploads = config.split('location ^~ /storage/customer-one/uploads/ {', 1)[1].split('    }', 1)[0]
         self.assertIn('auth_request /_verify_customer-one;', uploads)
-        self.assertIn('client_max_body_size 128m;', uploads)
+        self.assertIn('client_max_body_size 512m;', uploads)
 
     def test_multiple_custom_tenants_have_separate_resources(self):
         second = dict(self.tenant, slug='customer-two', email='other@example.test')

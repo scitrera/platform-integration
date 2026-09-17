@@ -155,7 +155,7 @@ http {
       proxy_set_header Host objects:9000;
       proxy_set_header Content-Type $http_content_type;
       proxy_set_header Content-Length $http_content_length;
-      client_max_body_size 128m;
+      client_max_body_size 512m;
       proxy_request_buffering off;
       set $upload_{variable} http://objects:9000;
       rewrite ^/storage/{slug}/uploads/(.*)$ /$1 break;
@@ -173,7 +173,7 @@ http {
       proxy_set_header If-Range $http_if_range;
       proxy_set_header If-None-Match $http_if_none_match;
       proxy_set_header Content-Length $http_content_length;
-      client_max_body_size 128m;
+      client_max_body_size 512m;
       proxy_request_buffering off;
       proxy_buffering off;
       set $storage_{variable} http://storage-edge:8090;
