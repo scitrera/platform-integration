@@ -50,6 +50,8 @@ data:
         }
         location = /_verify_{{ .id }} {
           internal;
+          # Upload routes enforce their own limit; auth never forwards a body.
+          client_max_body_size 0;
           proxy_pass http://{{ $.Release.Name }}-auth:8080/auth/verify?workspace_id=auth-app&tenant_id={{ .id }};
           proxy_pass_request_body off;
           proxy_pass_request_headers off;

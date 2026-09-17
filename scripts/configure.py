@@ -107,6 +107,8 @@ http {
 '''
         text += f'''    location = /_verify_{slug} {{
       internal;
+      # Upload routes enforce their own limit; auth never forwards a body.
+      client_max_body_size 0;
       proxy_pass http://auth:8080/auth/verify?workspace_id=auth-app&tenant_id={slug};
       proxy_pass_request_body off;
       proxy_pass_request_headers off;

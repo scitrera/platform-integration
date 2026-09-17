@@ -57,6 +57,17 @@ class ComposeTenantChecks(unittest.TestCase):
         self.assertIn('$platform_customer_one', nginx([self.tenant]))
         self.assertNotIn('$platform_customer-one', nginx([self.tenant]))
 
+    def test_upload_auth_subrequest_does_not_reapply_default_body_limit(self):
+        config = nginx([self.tenant])
+        verify = config.split('location = /_verify_customer-one {', 1)[1].split('}', 1)[0]
+        self.assertIn('internal;', verify)
+        self.assertIn('client_max_body_size 0;', verify)
+        self.assertIn('proxy_pass_request_body off;', verify)
+        self.assertIn('proxy_set_header Content-Length "";', verify)
+        uploads = config.split('location ^~ /storage/customer-one/uploads/ {', 1)[1].split('    }', 1)[0]
+        self.assertIn('auth_request /_verify_customer-one;', uploads)
+        self.assertIn('client_max_body_size 128m;', uploads)
+
     def test_multiple_custom_tenants_have_separate_resources(self):
         second = dict(self.tenant, slug='customer-two', email='other@example.test')
         rendered = render_compose(yaml.safe_load((ROOT / 'compose/compose.yaml').read_text()), [self.tenant, second])
