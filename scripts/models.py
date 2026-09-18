@@ -288,7 +288,11 @@ def validate_documents(root, plan, central):
             run_private(["docker", "run", "--rm", "--network", "none", "--read-only",
                          "--user", f"{os.getuid()}:{os.getgid()}", "-v", str(folder) + ":/run/gateway:ro",
                          "-e", "SPARKROUTE_CONFIG=/run/gateway/config.json",
-                         "-e", "SPARKROUTE_CREDENTIAL_FILE_ROOTS=/run/gateway", image, "-config-check"],
+                         "-e", "SPARKROUTE_CREDENTIAL_FILE_ROOTS=/run/gateway", image, "-config-check",
+                         # Validate the managed auth shape without opening a DB.
+                         # Network remains disabled and this invocation never serves.
+                         "-caller-auth-mode", "managed",
+                         "-client-credentials-postgres-url", "postgres://unreachable.invalid:1/config-check"],
                         root, "Offline model validation")
 
 

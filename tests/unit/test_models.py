@@ -51,6 +51,20 @@ class ModelsTests(unittest.TestCase):
         models.write_json(models.plan_path(self.root, 'jgl'), plan)
         return plan
 
+    def test_offline_validation_has_explicit_nonserving_managed_auth(self):
+        plan = self.staged()
+        models.write_json(self.root / '.local/images.json', {'SPARKROUTE_IMAGE': {'tag': 'synthetic/gateway'}})
+        with patch.object(models, 'run_private') as run:
+            models.validate_documents(self.root, plan, self.old_central)
+        self.assertTrue(run.call_count)
+        for call in run.call_args_list:
+            args = call.args[0]
+            self.assertEqual(args[args.index('--network') + 1], 'none')
+            self.assertIn('-config-check', args)
+            self.assertEqual(args[args.index('-caller-auth-mode') + 1], 'managed')
+            self.assertEqual(args[args.index('-client-credentials-postgres-url') + 1],
+                             'postgres://unreachable.invalid:1/config-check')
+
     def test_disabled_defaults_are_noop(self):
         plan = self.compile({'version': 1, 'models': None, 'routes': None})
         models.write_json(models.plan_path(self.root, 'jgl'), plan)
