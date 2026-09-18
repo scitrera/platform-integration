@@ -1,0 +1,13 @@
+image: '' # Required immutable registry manifest digest.
+phase: prepare # prepare first; switch to serve only after the Job succeeds.
+cache:
+  existingClaim: ''
+  size: 40Gi
+  storageClassName: ''
+nodeSelector:
+  kubernetes.io/arch: amd64
+  nvidia.com/gpu.product: NVIDIA-L4
+tolerations: []
+resources:
+  requests: {cpu: '8', memory: 32Gi, nvidia.com/gpu: '1'}
+  limits: {cpu: '8', memory: 32Gi, nvidia.com/gpu: '1'}

@@ -1,0 +1,7 @@
+apiVersion: v2
+name: memorylayer-embed
+description: Portable three-model embed/OCR appliance; one shared GPU
+version: 0.1.0
+appVersion: qwen-colmodern-unlimited-l4-v1
+type: application
+dependencies: []

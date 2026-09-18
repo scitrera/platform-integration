@@ -286,6 +286,61 @@
         "profiles",
         "allowedProfiles"
       ]
+    },
+    "documentServices": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "profile": {
+          "type": "string"
+        },
+        "environment": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "proxy": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "enabled": {
+              "type": "boolean"
+            },
+            "image": {
+              "type": "string"
+            },
+            "upstream": {
+              "type": "string"
+            },
+            "secretName": {
+              "type": "string"
+            },
+            "routing": {
+              "type": "object"
+            },
+            "credentials": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "secretName"
+                ],
+                "properties": {
+                  "secretName": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "required": [

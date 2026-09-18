@@ -25,3 +25,7 @@ registry publication is separate from local verification. See the
 [gateway distribution and verification record](docs/gateway-distribution.md).
 No original monorepo, private administration application, hosted fleet state or
 ArgoCD is an installation prerequisite.
+
+## Embeddings and OCR
+
+See [document services](docs/document-services.md) for the portable GPU Compose/Helm appliance, private Modal adapter, and independent configuration renderer. Existing synthetic fixtures remain unchanged; the real 1920-dimensional profile requires a prepared storage target and qualified component images.

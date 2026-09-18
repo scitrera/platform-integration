@@ -7,6 +7,7 @@ import json
 import re
 from pathlib import Path
 import subprocess
+import sys
 import tempfile
 import yaml
 
@@ -91,7 +92,7 @@ def main():
                                       "--kube-version", "1.34.0"], capture_output=True, text=True)
             assert failure.returncode != 0 and "registry manifest digest" in failure.stderr
         print("Checked all lifecycle phases and digest refusal:", kind)
-    subprocess.run(["python3", "-m", "unittest", "discover", "-s", str(ROOT / "tests/unit")], check=True)
+    subprocess.run([sys.executable, "-m", "unittest", "discover", "-s", str(ROOT / "tests/unit")], check=True)
     print("Static integration checks passed. These do not establish installation or runtime acceptance.")
 
 

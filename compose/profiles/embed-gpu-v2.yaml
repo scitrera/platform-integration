@@ -1,0 +1,55 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# Two physical GPUs. Prepare weights before starting services; one proxy URL.
+services:
+  embedding-prepare:
+    image: ${EMBEDDING_SERVER_IMAGE:?Set a qualified embedding image digest}
+    profiles: [prepare]
+    entrypoint: [/opt/memorylayer/venvs/vllm/bin/python, /opt/memorylayer/prepare.py, models]
+    volumes: [embedding-models:/cache/huggingface]
+    restart: 'no'
+  transcription-prepare:
+    image: ${TRANSCRIPTION_SERVER_IMAGE:?Set a qualified transcription image digest}
+    profiles: [prepare]
+    entrypoint: [/opt/memorylayer/venvs/vllm/bin/python, /opt/memorylayer/prepare.py, models]
+    volumes: [transcription-models:/cache/huggingface]
+    restart: 'no'
+  embedding:
+    image: ${EMBEDDING_SERVER_IMAGE:?Set a qualified embedding image digest}
+    gpus: [{driver: nvidia, device_ids: ["${EMBEDDING_GPU_ID:?Set an exclusive GPU UUID}"], capabilities: [gpu]}]
+    shm_size: 4gb
+    volumes: [embedding-models:/cache/huggingface, embedding-kernels:/cache/kernels]
+    stop_grace_period: 60s
+    healthcheck: &gpu-health
+      test: [CMD, python, -c, "import urllib.request; urllib.request.urlopen('http://localhost:61051/health/ready')"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 1200s
+  transcription:
+    image: ${TRANSCRIPTION_SERVER_IMAGE:?Set a qualified transcription image digest}
+    gpus: [{driver: nvidia, device_ids: ["${TRANSCRIPTION_GPU_ID:?Set a different exclusive GPU UUID}"], capabilities: [gpu]}]
+    shm_size: 4gb
+    volumes: [transcription-models:/cache/huggingface, transcription-kernels:/cache/kernels]
+    stop_grace_period: 60s
+    healthcheck: *gpu-health
+  embed-proxy:
+    image: ${EMBED_PROXY_IMAGE:?Set a qualified proxy image digest}
+    environment:
+      EMBED_PROXY_CONFIG_JSON: '{"version":2,"services":{"embedding":{"mode":"http","endpoint":"http://embedding:61051","max_in_flight":32,"max_queued":64},"transcription":{"mode":"http","endpoint":"http://transcription:61051","max_in_flight":16,"max_queued":32}}}'
+    ports: ["127.0.0.1:61051:8080"]
+    volumes: [proxy-spool:/tmp]
+    mem_limit: 2g
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    healthcheck:
+      test: [CMD, python, -c, "import urllib.request; urllib.request.urlopen('http://localhost:8080/health/live')"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+volumes:
+  proxy-spool: {}
+  embedding-models: {}
+  embedding-kernels: {}
+  transcription-models: {}
+  transcription-kernels: {}

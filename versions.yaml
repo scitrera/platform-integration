@@ -10,6 +10,9 @@ availability_note: Upstream dependency commits are anonymously retrievable; back
   commits remain local candidates. Image IDs identify local engine content; registry
   publication remains pending.
 charts:
+  memorylayer-embed:
+    version: 0.1.0
+    dependencies: []
   platform-shared:
     version: 0.1.0
     app_version: candidate-2026-09-11

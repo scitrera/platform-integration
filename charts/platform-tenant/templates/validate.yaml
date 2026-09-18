@@ -4,3 +4,49 @@
 {{- if not (regexMatch "@sha256:[a-f0-9]{64}$" $image) }}
 {{- fail (printf "production images.%s must use a registry manifest digest" $name) }}
 {{- end }}{{- end }}{{- end }}
+
+{{- if .Values.documentServices.enabled }}
+{{- if or (ne (int .Values.embeddingDimensions) 1920) (not .Values.documentTranscription) }}
+{{- fail "documentServices requires 1920-dimensional prepared storage and documentTranscription=true" }}
+{{- end }}
+{{- if and .Values.documentServices.proxy.enabled (not .Values.development) }}
+{{- if not (regexMatch "@sha256:[a-f0-9]{64}$" .Values.documentServices.proxy.image) }}
+{{- fail "documentServices.proxy.image must use a registry manifest digest" }}
+{{- end }}
+{{- end }}
+{{- end }}
+
+{{- if .Values.documentServices.enabled }}
+{{- if not (has .Values.documentServices.profile (list "qwen-colmodern-unlimited-l4-v1" "qwen-colmodern-dual-ocr-l4-v2")) }}
+{{- fail "unsupported documentServices.profile" }}
+{{- end }}
+{{- range $key := list "MEMORYLAYER_EMBEDDING_DIMENSIONS" "MEMORYLAYER_DOCUMENT_TRANSCRIBE_ENABLED" "MEMORYLAYER_EMBED_TRANSPORT" "MEMORYLAYER_ENTITY_LINKER_PROVIDER" }}
+{{- if hasKey $.Values.documentServices.environment $key }}
+{{- fail (printf "documentServices.environment cannot override chart-owned %s" $key) }}
+{{- end }}
+{{- end }}
+{{- if .Values.documentServices.proxy.enabled }}
+{{- if .Values.documentServices.proxy.routing }}
+{{- if or (ne (int .Values.documentServices.proxy.routing.version) 2) (ne (len .Values.documentServices.proxy.routing.services) 2) }}
+{{- fail "split proxy requires v2 routing and exactly two services" }}
+{{- end }}
+{{- range $role := list "embedding" "transcription" }}
+{{- $service := index $.Values.documentServices.proxy.routing.services $role }}
+{{- if not $service }}{{- fail "split proxy requires both roles" }}{{- end }}
+{{- if eq $service.mode "modal" }}
+{{- $auth := index $.Values.documentServices.proxy.credentials $role }}
+{{- if not (and $auth $auth.secretName (hasPrefix "https://" $service.endpoint)) }}
+{{- fail "each Modal role requires HTTPS and an existing credential Secret" }}
+{{- end }}
+{{- else if ne $service.mode "http" }}{{- fail "unsupported split transport" }}{{- end }}
+{{- end }}
+{{- else }}
+{{- if not (and .Values.documentServices.proxy.secretName (hasPrefix "https://" .Values.documentServices.proxy.upstream)) }}
+{{- fail "Modal proxy requires an HTTPS upstream and existing credential Secret" }}
+{{- end }}
+{{- end }}
+{{- if ne (index .Values.documentServices.environment "MEMORYLAYER_EMBED_SERVER_URL") "http://127.0.0.1:8081" }}
+{{- fail "Modal proxy consumers must use http://127.0.0.1:8081" }}
+{{- end }}
+{{- end }}
+{{- end }}

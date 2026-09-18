@@ -1,0 +1,121 @@
+{{- if not (regexMatch "@sha256:[a-f0-9]{64}$" .Values.image) }}
+{{- fail "image must use an immutable registry manifest digest" }}
+{{- end }}
+{{- if not (has .Values.phase (list "prepare" "serve")) }}
+{{- fail "phase must be prepare or serve" }}
+{{- end }}
+{{- $claim := .Values.cache.existingClaim | default (printf "%s-models" .Release.Name) }}
+{{- if not .Values.cache.existingClaim }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ $claim }}
+  annotations: {helm.sh/resource-policy: keep}
+spec:
+  accessModes: [ReadWriteOnce]
+  {{- if .Values.cache.storageClassName }}
+  storageClassName: {{ .Values.cache.storageClassName | quote }}
+  {{- end }}
+  resources:
+    requests: {storage: {{ .Values.cache.size }}}
+---
+{{- end }}
+{{- if eq .Values.phase "prepare" }}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ .Release.Name }}-prepare
+spec:
+  backoffLimit: 0
+  activeDeadlineSeconds: 1800
+  template:
+    spec:
+      automountServiceAccountToken: false
+      restartPolicy: Never
+      nodeSelector: {{ toYaml .Values.nodeSelector | nindent 8 }}
+      tolerations: {{ toYaml .Values.tolerations | nindent 8 }}
+      containers:
+      - name: prepare
+        image: {{ .Values.image | quote }}
+        command: [/opt/memorylayer/venvs/vllm/bin/python, /opt/memorylayer/prepare.py, models]
+        resources:
+          requests: {cpu: '2', memory: 8Gi}
+          limits: {cpu: '4', memory: 8Gi}
+        volumeMounts:
+        - {name: models, mountPath: /cache/huggingface}
+      volumes:
+      - name: models
+        persistentVolumeClaim: {claimName: {{ $claim }}}
+{{- else }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Release.Name }}
+spec:
+  replicas: 1
+  strategy: {type: Recreate}
+  selector:
+    matchLabels: {app.kubernetes.io/instance: {{ .Release.Name }}, app.kubernetes.io/component: embed-server}
+  template:
+    metadata:
+      labels: {app.kubernetes.io/instance: {{ .Release.Name }}, app.kubernetes.io/component: embed-server}
+    spec:
+      automountServiceAccountToken: false
+      terminationGracePeriodSeconds: 60
+      nodeSelector: {{ toYaml .Values.nodeSelector | nindent 8 }}
+      tolerations: {{ toYaml .Values.tolerations | nindent 8 }}
+      containers:
+      - name: embed-server
+        image: {{ .Values.image | quote }}
+        resources: {{ toYaml .Values.resources | nindent 10 }}
+        ports: [{name: http, containerPort: 61051}]
+        startupProbe:
+          httpGet: {port: http, path: /health/ready}
+          periodSeconds: 5
+          timeoutSeconds: 5
+          failureThreshold: 240
+        readinessProbe:
+          httpGet: {port: http, path: /health/ready}
+          periodSeconds: 10
+          timeoutSeconds: 10
+        livenessProbe:
+          httpGet: {port: http, path: /health/ready}
+          periodSeconds: 30
+          timeoutSeconds: 10
+          failureThreshold: 3
+        volumeMounts:
+        - {name: models, mountPath: /cache/huggingface}
+        - {name: shm, mountPath: /dev/shm}
+        - {name: kernels, mountPath: /cache/kernels}
+      volumes:
+      - name: models
+        persistentVolumeClaim: {claimName: {{ $claim }}}
+      - name: shm
+        emptyDir: {medium: Memory, sizeLimit: 4Gi}
+      - name: kernels
+        emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .Release.Name }}
+spec:
+  type: ClusterIP
+  selector: {app.kubernetes.io/instance: {{ .Release.Name }}, app.kubernetes.io/component: embed-server}
+  ports: [{name: http, port: 61051, targetPort: http}]
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ .Release.Name }}-private
+spec:
+  podSelector:
+    matchLabels: {app.kubernetes.io/instance: {{ .Release.Name }}, app.kubernetes.io/component: embed-server}
+  policyTypes: [Ingress]
+  ingress:
+  - from:
+    - namespaceSelector: {}
+      podSelector:
+        matchLabels: {app.kubernetes.io/component: memorylayer}
+    ports: [{protocol: TCP, port: 61051}]
+{{- end }}

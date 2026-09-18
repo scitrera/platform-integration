@@ -97,3 +97,14 @@ blobUploadBaseURL: ""
 workProfiles:
   profiles: {}
   allowedProfiles: []
+
+# Optional real document services, rendered by scripts/document_services.py.
+documentServices:
+  enabled: false
+  profile: ""
+  environment: {}
+  proxy:
+    enabled: false
+    image: ""
+    upstream: ""
+    secretName: ""

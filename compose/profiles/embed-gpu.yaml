@@ -1,0 +1,27 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# Standalone generic serving stack. Run prepare first, then serving; no platform/customer data.
+services:
+  embed-prepare:
+    image: ${EMBED_SERVER_IMAGE:?Set a qualified serving image digest}
+    profiles: [prepare]
+    entrypoint: [/opt/memorylayer/venvs/vllm/bin/python, /opt/memorylayer/prepare.py, models]
+    volumes: [embed-models:/cache/huggingface]
+    restart: 'no'
+  embed-server:
+    image: ${EMBED_SERVER_IMAGE:?Set a qualified serving image digest}
+    gpus: all
+    environment:
+      CUDA_VISIBLE_DEVICES: '0'
+    shm_size: 4gb
+    volumes: [embed-models:/cache/huggingface, embed-kernels:/cache/kernels]
+    ports: ["127.0.0.1:61051:61051"]
+    stop_grace_period: 60s
+    healthcheck:
+      test: [CMD, python, -c, "import urllib.request; urllib.request.urlopen('http://localhost:61051/health/ready')"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 1200s
+volumes:
+  embed-models: {}
+  embed-kernels: {}
