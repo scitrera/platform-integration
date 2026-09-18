@@ -170,3 +170,5 @@ independently. Modal consumption needs only the proxy, with no local GPU release
 Compose/Helm rendering is tested separately from Modal GPU qualification. Live GPU
 execution on a particular Docker/Kubernetes installation still requires acceptance
 on that installation. Registry image publication is a separate release step.
+
+Split v2 proxy configuration accepts `proxy.timeout_seconds` (default 900; range 60–1800). This is the total queue/forward deadline and the HTTP read/write budget, including Modal cold start and continuation requests. The consumer and NER timeouts are rendered 60 seconds longer. Connection establishment remains capped at 10 seconds; inference POSTs are never replayed on a read timeout.

@@ -14,8 +14,11 @@ PROFILE_V2 = 'qwen-colmodern-dual-ocr-l4-v2'
 def validate(config, *, check_secrets=False, allow_local_image=False):
     if set(config) - {'version', 'profile', 'proxy', 'services', 'consumer'} or not {'version', 'profile', 'proxy', 'services'} <= set(config) or config['version'] != 2 or config['profile'] != PROFILE_V2:
         raise ValueError('Unsupported split document-services configuration')
-    if set(config['proxy']) != {'image'} or set(config['services']) != {'embedding', 'transcription'}:
+    if not {'image'} <= set(config['proxy']) or set(config['proxy']) - {'image', 'timeout_seconds'} or set(config['services']) != {'embedding', 'transcription'}:
         raise ValueError('Split configuration requires one proxy and both roles')
+    timeout = config['proxy'].get('timeout_seconds', 900)
+    if type(timeout) is not int or not 60 <= timeout <= 1800:
+        raise ValueError('Proxy timeout_seconds must be an integer between 60 and 1800')
     consumer = config.get('consumer', {})
     if not isinstance(consumer, dict) or set(consumer) - {'embedding_concurrency', 'transcription_concurrency'}:
         raise ValueError('Unsupported consumer concurrency fields')
@@ -54,12 +57,13 @@ def render(config, tenant, storage_dimensions, *, allow_local_image=False):
     name = 'embed-proxy-' + tenant
     compatible = {'version': 1, 'profile': PROFILE, 'transport': 'http', 'endpoint': f'http://{name}:8080'}
     compose, helm, legacy = render_v1(compatible, tenant, storage_dimensions)
+    timeout = config['proxy'].get('timeout_seconds', 900)
     routing = {'version': 2, 'services': {}}
     env, mounts, credentials = {}, [], {}
     for role, service in config['services'].items():
         item = {'endpoint': service['endpoint'], 'mode': service['transport'],
                 'max_in_flight': 32 if role == 'embedding' else 16,
-                'max_queued': 64 if role == 'embedding' else 32}
+                'max_queued': 64 if role == 'embedding' else 32, 'deadline': timeout}
         if role == 'embedding':
             item['capabilities'] = service['capabilities']
         if service['transport'] == 'modal':
@@ -84,7 +88,8 @@ def render(config, tenant, storage_dimensions, *, allow_local_image=False):
     compose.setdefault('volumes', {})[name + '-spool'] = {}
     compose['services'][f'memorylayer-{tenant}']['depends_on'] = {name: {'condition': 'service_healthy'}}
     consumer = compose['services'][f'memorylayer-{tenant}']['environment']
-    consumer['MEMORYLAYER_GLINER2_NER_TIMEOUT'] = '1860'
+    consumer['MEMORYLAYER_GLINER2_NER_TIMEOUT'] = str(timeout + 60)
+    consumer['MEMORYLAYER_EMBED_SERVER_TIMEOUT'] = str(timeout + 60)
     limits = config.get('consumer', {})
     client_limits = {
         'MEMORYLAYER_EMBED_IMAGE_CONCURRENCY': str(limits.get('embedding_concurrency', 2)),
@@ -97,7 +102,8 @@ def render(config, tenant, storage_dimensions, *, allow_local_image=False):
     # Capability availability never silently selects the extraction provider.
     helm['documentServices']['profile'] = PROFILE_V2
     helm['documentServices']['environment']['MEMORYLAYER_EMBED_SERVER_URL'] = 'http://127.0.0.1:8081'
-    helm['documentServices']['environment']['MEMORYLAYER_GLINER2_NER_TIMEOUT'] = '1860'
+    helm['documentServices']['environment']['MEMORYLAYER_GLINER2_NER_TIMEOUT'] = str(timeout + 60)
+    helm['documentServices']['environment']['MEMORYLAYER_EMBED_SERVER_TIMEOUT'] = str(timeout + 60)
     helm['documentServices']['environment'].update(client_limits)
     helm['documentServices']['proxy'] = {'enabled': True, 'image': config['proxy']['image'],
                                          'routing': routing, 'credentials': credentials}

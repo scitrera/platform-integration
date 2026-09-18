@@ -157,3 +157,18 @@ class SpoolTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(upstream.pending, 0)
         finally:
             await upstream.client.aclose()
+
+
+class ColdStartTimeoutTests(unittest.IsolatedAsyncioTestCase):
+    async def test_http_read_budget_matches_configured_total_deadline(self):
+        seen = []
+        def handler(request):
+            seen.append(request.extensions['timeout'])
+            return httpx.Response(200, json={'ready': True})
+        upstream = proxy.Upstream('http://transcription:61051', mode='http', deadline=900,
+                                  transport=httpx.MockTransport(handler))
+        try:
+            self.assertEqual((await upstream.forward('POST', '/v1/transcribe')).status_code, 200)
+            self.assertEqual(seen, [{'connect': 10, 'read': 900, 'write': 900, 'pool': 900}])
+        finally:
+            await upstream.client.aclose()

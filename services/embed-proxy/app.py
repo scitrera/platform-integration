@@ -55,7 +55,7 @@ class Upstream:
         self.headers = {'Content-Type': 'application/json', 'Accept-Encoding': 'identity'}
         if mode == 'modal':
             self.headers.update({'Modal-Key': key, 'Modal-Secret': token})
-        self.client = httpx.AsyncClient(transport=transport, timeout=httpx.Timeout(180, connect=10),
+        self.client = httpx.AsyncClient(transport=transport, timeout=httpx.Timeout(deadline, connect=min(10, deadline)),
             limits=httpx.Limits(max_connections=max_in_flight, max_keepalive_connections=max_in_flight, keepalive_expiry=4),
             follow_redirects=False, trust_env=False)
         self.capabilities = set(capabilities) if capabilities is not None else None

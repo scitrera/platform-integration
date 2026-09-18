@@ -118,6 +118,22 @@ class SplitDocumentServicesTests(unittest.TestCase):
         self.assertEqual(len(mixed[0]['services']['embed-proxy-alpha']['volumes']), 3)
         self.assertEqual(mixed[2]['embedding_identity'], manifest['embedding_identity'])
 
+    def test_cold_start_deadline_and_client_headroom_are_rendered(self):
+        import json
+        for value in (900, 1200):
+            config = self.config()
+            config['proxy']['timeout_seconds'] = value
+            compose, helm, _ = ds.render(config, 'alpha', 1920)
+            routing = json.loads(compose['services']['embed-proxy-alpha']['environment']['EMBED_PROXY_CONFIG_JSON'])
+            self.assertEqual({s['deadline'] for s in routing['services'].values()}, {value})
+            self.assertEqual(helm['documentServices']['proxy']['routing'], routing)
+            for env in (compose['services']['memorylayer-alpha']['environment'], helm['documentServices']['environment']):
+                self.assertEqual(env['MEMORYLAYER_EMBED_SERVER_TIMEOUT'], str(value + 60))
+                self.assertEqual(env['MEMORYLAYER_GLINER2_NER_TIMEOUT'], str(value + 60))
+        for value in (0, 59, 1801, True, '900'):
+            config['proxy']['timeout_seconds'] = value
+            with self.assertRaises(ValueError): ds.validate(config)
+
     def test_consumer_limits_are_configurable_in_both_outputs(self):
         config = self.config()
         config['consumer'] = {'embedding_concurrency': 16, 'transcription_concurrency': 8}
