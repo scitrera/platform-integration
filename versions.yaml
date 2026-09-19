@@ -39,13 +39,13 @@ verification_scope:
     new Kubernetes runtime acceptance not performed
 images:
   BACKEND_IMAGE:
-    tag: platform-integration/backend:d94dafc5515482c2
-    local_image_id: sha256:6f1cf793cb154b07f7364e8614dfb0efffa7a7d1fd799b43d0c288389827c5c2
+    tag: platform-integration/backend:55bac34218babd60
+    local_image_id: sha256:d009cb45abafbcd77c89ef0f7701e3ba1607636fad37e69505867055bddbc2c5
     os: linux
     architecture: arm64
     registry_manifest_digests: []
     availability: Verified in local Docker engine; registry publication not established
-    source_set: platform-backend-d94dafc5515482c2
+    source_set: platform-backend-55bac34218babd60
   SAHARA_IMAGE:
     tag: platform-integration/sahara:60dece1d39c0b694
     local_image_id: sha256:0b44d66e29ca7d5b89406a396d6e9eb195c228fb16233fb55f37a26437942393
@@ -355,6 +355,15 @@ source_sets:
     include_untracked: []
     availability: Built from local main source; upstream publication tracked by owning
       repository
+  platform-backend-55bac34218babd60:
+    component: platform-backend
+    repository: https://github.com/scitrera/platform-backend.git
+    revision: f8292f34419f511a73e69aad90a3e323bfa5e14a
+    tracked_content_sha256: 55bac34218babd608b1ac3cff32687a8b70da8555f2103cc3a8dcbfe5c15c541
+    dirty: false
+    reviewed_file_count: 1791
+    include_untracked: []
+    availability: Built from local main; repository publication not configured
 upstream_changes:
   sahara-oss:
     pull_request: https://github.com/scitrera/agent-harness-go/pull/1
