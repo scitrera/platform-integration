@@ -190,8 +190,9 @@ URLs remain explicit selections.
 
 The pinned Aether revision includes on-demand Badger replay/KV reads and a
 default 1 GiB Go runtime memory budget. This is a soft garbage-collector budget,
-not an RSS or container limit: mapped database files, native allocations and
-other non-Go memory need additional headroom. Measure representative replay
+not an RSS or container limit. Transient live Go allocations can exceed the
+budget, and mapped database files, native allocations and other non-Go memory
+need additional headroom. Measure representative replay
 and ingestion before choosing a VM or imposing a hard container limit.
 
 To override the runtime budget, set `GOMEMLIMIT` on the tenant's Aether service
@@ -211,10 +212,12 @@ gRPC gateway and operations health/metrics listener are independent. Keep
 the administration listener private and validate its tenant CA when connecting.
 
 The tenant Helm chart gives Aether a separate `roleResources.aether` default
-(512 MiB request, 4 GiB container limit) to leave headroom above its 1 GiB Go
+(512 MiB request, 8 GiB container limit) to leave headroom above its 1 GiB Go
 budget. This is a starting configuration, not a qualified maximum for every
 data/replay workload. Include startup/reconnection and kernel lifetime peaks,
-not just steady-state samples, when qualifying a lower limit. Override it using
+not just steady-state samples, when qualifying a lower limit. Also exercise
+repeated task creation/recovery under the intended CPU limit: brief allocation
+bursts can exceed both the steady footprint and the soft Go budget. Override it using
 measured total container demand; lowering
 `GOMEMLIMIT` does not bound mapped files. Compose leaves the hard limit to the
 operator's overlay.
