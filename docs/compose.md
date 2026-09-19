@@ -200,3 +200,12 @@ Aether environment Secret. An explicit value is preserved by AetherLite;
 `off` disables the budget. The effective value is logged at startup. The
 standalone gateway is unaffected. Image/source pins are in `versions.yaml`;
 local image IDs are engine-specific and do not establish registry publication.
+
+The private Aether administration listener uses HTTPS with the same tenant
+server certificate as its gateway. Existing generated `.local/<tenant>/aether.yaml`
+files are preserved by configuration: when upgrading, add `admin.tls_cert_file`
+(`/etc/aether/tls/tls.crt`) and `admin.tls_key_file`
+(`/etc/aether/tls/tls.key`) and recreate the Aether service. Without TLS the new
+server refuses to start an administration listener that has an API key. The
+gRPC gateway and operations health/metrics listener are independent. Keep
+the administration listener private and validate its tenant CA when connecting.

@@ -250,7 +250,8 @@ def main():
             'mode':'lite','gateway':{'port':50051,'ops_port':9090,'gateway_id':f'aether-{slug}',
               'tls':{'cert_file':'/etc/aether/tls/tls.crt','key_file':'/etc/aether/tls/tls.key',
                      'ca_file':'/etc/aether/tls/ca.crt','client_auth':'require'}},
-            'admin':{'enabled':True,'port':31880,'cors_origin':''},
+            'admin':{'enabled':True,'port':31880,'cors_origin':'',
+                     'tls_cert_file':'/etc/aether/tls/tls.crt','tls_key_file':'/etc/aether/tls/tls.key'},
             'auth':{'modes':['mtls','api_key'],'mtls':{'required':True,'mode':'semi-strict'},
                     'api_key':{},'oauth':{'verify_signature':True,'providers':[]}},
             'acl':{'required':False},'lite':{'data_dir':'/data'},'log_level':'info'

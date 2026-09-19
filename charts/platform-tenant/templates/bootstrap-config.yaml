@@ -11,7 +11,8 @@ data:
   aether.yaml: '{"mode": "lite", "gateway": {"port": 50051, "ops_port": 9090, "gateway_id":
     "{{ .Values.tenant }}", "tls": {"cert_file": "/run/tls/tls.crt", "key_file": "/run/tls/tls.key",
     "ca_file": "/run/tls/ca.crt", "client_auth": "require"}}, "admin": {"enabled":
-    true, "port": 31880, "cors_origin": ""}, "auth": {"modes": ["mtls", "api_key"],
+    true, "port": 31880, "cors_origin": "", "tls_cert_file": "/run/tls/tls.crt",
+    "tls_key_file": "/run/tls/tls.key"}, "auth": {"modes": ["mtls", "api_key"],
     "mtls": {"required": true, "mode": "semi-strict"}, "api_key": {}, "oauth": {"verify_signature":
     true, "providers": []}}, "acl": {"required": false}, "lite": {"data_dir": "/data"},
     "log_level": "info"}'
