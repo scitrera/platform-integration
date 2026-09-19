@@ -51,6 +51,16 @@ spec:
           value: /data
         - name: MEMORYLAYER_BLOB_STORAGE_BASE_PATH
           value: /data/blobs
+        - name: MEMORYLAYER_TENANT_ID
+          value: {{ .Values.tenant | quote }}
+        - name: MEMORYLAYER_BLOB_STORAGE_SERVICE
+          value: {{ .Values.documentBlobStorage.provider | quote }}
+        - name: MEMORYLAYER_BLOBGW_URL
+          value: http://storage-blobgw.{{ .Values.storageNamespace }}.svc:8080
+        - name: MEMORYLAYER_BLOBGW_DOMAIN
+          value: {{ .Values.tenant | quote }}
+        - name: MEMORYLAYER_BLOBGW_EDGE_URL
+          value: http://storage-edge.{{ .Values.storageNamespace }}.svc:8090
         - name: STATEFUL_ROOT
           value: /tmp/state
         - name: XDG_CONFIG_HOME

@@ -39,13 +39,13 @@ verification_scope:
     new Kubernetes runtime acceptance not performed
 images:
   BACKEND_IMAGE:
-    tag: platform-integration/backend:60dece1d39c0b694
-    local_image_id: sha256:970b340b94f16b410d4aefd2df45d9209b387c6bf0b6f5163d9c6d5fa7dc5c53
+    tag: platform-integration/backend:d94dafc5515482c2
+    local_image_id: sha256:6f1cf793cb154b07f7364e8614dfb0efffa7a7d1fd799b43d0c288389827c5c2
     os: linux
     architecture: arm64
     registry_manifest_digests: []
-    availability: verified in local Docker engine; registry publication not established
-    source_set: platform-backend-60dece1d39c0b694
+    availability: Verified in local Docker engine; registry publication not established
+    source_set: platform-backend-d94dafc5515482c2
   SAHARA_IMAGE:
     tag: platform-integration/sahara:60dece1d39c0b694
     local_image_id: sha256:0b44d66e29ca7d5b89406a396d6e9eb195c228fb16233fb55f37a26437942393
@@ -109,13 +109,13 @@ images:
     availability: verified in local Docker engine; registry publication not established
     source_set: platform-backend-60dece1d39c0b694
   MEMORYLAYER_IMAGE:
-    tag: platform-integration/memorylayer:9b4843491c4b4e4f
-    local_image_id: sha256:ca756c0dc8a01b5cc9000a2edbfa7ed827cd7093e6af738da87b72dc1f9106d5
+    tag: platform-integration/memorylayer:c75b5deaff53b505
+    local_image_id: sha256:e062d65f44cf06a118c4f0386e9af0ad27904dae6409bbe97c018569c521ac56
     os: linux
     architecture: arm64
     registry_manifest_digests: []
-    availability: verified in local Docker engine; registry publication not established
-    source_set: memorylayer-enterprise-9b4843491c4b4e4f
+    availability: Verified in local Docker engine; registry publication not established
+    source_set: memorylayer-enterprise-c75b5deaff53b505
   CONNECTORS_IMAGE:
     tag: platform-integration/connectors:9b4843491c4b4e4f
     local_image_id: sha256:f9a2f04c864ab4f916838f54f8b16ea13bbdfe3261b766d143be8d195284ccf7
@@ -141,13 +141,13 @@ images:
     availability: verified in local Docker engine; registry publication not established
     source_set: memorylayer-enterprise-9b4843491c4b4e4f
   EDGE_IMAGE:
-    tag: platform-integration/edge:88274bd9b3fa5b7d
-    local_image_id: sha256:e5786548d2a97d464467f96ed83526b5d5228dc65d214ef0687079dda9c0ceec
+    tag: platform-integration/edge:22d3b7679ec59f40
+    local_image_id: sha256:0b116ebf87b647b4043011e1abf6c0ed12be409cccc39b78b240d17e6c9ee11e
     os: linux
     architecture: arm64
     registry_manifest_digests: []
-    availability: verified in local Docker engine; registry publication not established
-    source_set: memorylayer-storage-88274bd9b3fa5b7d
+    availability: Verified in local Docker engine; registry publication not established
+    source_set: memorylayer-storage-22d3b7679ec59f40
   BLOBGW_IMAGE:
     tag: platform-integration/blobgw:88274bd9b3fa5b7d
     local_image_id: sha256:cd5c0fa090e2fa8382ea57638abb140dd1bbdcd6b076f9651aa476ea43d10b11
@@ -172,16 +172,16 @@ images:
     verified_date: '2026-09-15'
     source_set: auth-go-dd4d9dc5b6ee2252
   WEB_IMAGE:
-    tag: platform-integration/web:16ef11e56db7a401
-    local_image_id: sha256:a5c1b8c971d4ca9d1eca08cd9333e5b1fc61e95cdb9c527b0f836d2c92cdd25e
+    tag: platform-integration/web:f04187580a7c121a
+    local_image_id: sha256:726859ccfe86ba1c4e77321d23d0277ea271cc0143525c67fcfcfe485c9749cb
     os: linux
     architecture: arm64
     registry_manifest_digests: []
-    availability: verified in local Docker engine; registry publication not established
-    source_set: platform-frontend-16ef11e56db7a401
+    availability: Verified in local Docker engine; registry publication not established
+    source_set: platform-frontend-f04187580a7c121a
     matching_source_archive:
       url_path: /source.tar.gz
-      sha256: fcc1fa388710789ce6491ac40d96e89e4da9ba7f6f9f3006d0c8535206195c7d
+      sha256: a6e4dbf72617f3f794a8d2632f3821282d2e747a3effb776389ecffe90843296
   AETHER_IMAGE:
     tag: platform-integration/aether:7935c06d344578d2
     local_image_id: sha256:307c94a825f0642a6d1e197654e3d5c0c21143caf3bec85d92db2efbfa333de0
@@ -295,6 +295,46 @@ source_sets:
     include_untracked: []
     availability: upstream source published on main; PR 10 merged
     upstream_pr: https://github.com/scitrera/aether/pull/10
+  platform-frontend-f04187580a7c121a:
+    component: platform-frontend
+    repository: https://github.com/scitrera/platform-frontend.git
+    revision: c68bb6a2a2c482878e4af2b71428d5536d7036bc
+    tracked_content_sha256: f04187580a7c121acfbedadb30e09c45abe7bbadfd3e0ff91092aa4126d9b11a
+    dirty: false
+    reviewed_file_count: 432
+    include_untracked: []
+    availability: Built from local main source; upstream publication tracked by owning
+      repository
+  platform-backend-d94dafc5515482c2:
+    component: platform-backend
+    repository: https://github.com/scitrera/platform-backend.git
+    revision: 8f788dc4243d2436da80768550a0bdb6bd8adf85
+    tracked_content_sha256: d94dafc5515482c25270dd8e27e9de9477cebfab5671230fd7dd0702122c096a
+    dirty: false
+    reviewed_file_count: 1791
+    include_untracked: []
+    availability: Built from local main source; upstream publication tracked by owning
+      repository
+  memorylayer-enterprise-c75b5deaff53b505:
+    component: memorylayer-enterprise
+    repository: https://github.com/scitrera/memorylayer-enterprise.git
+    revision: a3cb3f88366cd538c6e0b8f1cd21c869d09ac1f1
+    tracked_content_sha256: c75b5deaff53b50596dde84df8c7913d4cd99934dca0cfddc3bac921c231d9d5
+    dirty: false
+    reviewed_file_count: 597
+    include_untracked: []
+    availability: Built from local main source; upstream publication tracked by owning
+      repository
+  memorylayer-storage-22d3b7679ec59f40:
+    component: memorylayer-storage
+    repository: https://github.com/scitrera/memorylayer-storage.git
+    revision: d83506a9ed5de5e58e7b51a6fd786b38c9cd3ff2
+    tracked_content_sha256: 22d3b7679ec59f4072fff0fa83a9a7eab4199ef9c0bc1e10c1def7ac662ce811
+    dirty: false
+    reviewed_file_count: 564
+    include_untracked: []
+    availability: Built from local main source; upstream publication tracked by owning
+      repository
 upstream_changes:
   sahara-oss:
     pull_request: https://github.com/scitrera/agent-harness-go/pull/1

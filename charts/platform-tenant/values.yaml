@@ -117,3 +117,7 @@ documentServices:
     image: ""
     upstream: ""
     secretName: ""
+
+# Existing installations must copy and verify canonical blobs before switching.
+documentBlobStorage:
+  provider: default # default (local PVC) or blobgw

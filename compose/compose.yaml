@@ -602,6 +602,10 @@ services:
       # Canonical page files use direct HTTP storage; Aether carries descriptors.
       MEMORYLAYER_SOURCE_FILES_FETCH_URL: http://storage-download:8080
       MEMORYLAYER_TENANT_ID: alpha
+      MEMORYLAYER_BLOB_STORAGE_SERVICE: ${MEMORYLAYER_BLOB_STORAGE_SERVICE_ALPHA:-default}
+      MEMORYLAYER_BLOBGW_URL: http://blobgw:8080
+      MEMORYLAYER_BLOBGW_DOMAIN: alpha
+      MEMORYLAYER_BLOBGW_EDGE_URL: http://storage-edge:8090
       MEMORYLAYER_LLM_PROFILE_DEFAULT_PROVIDER: openai
       MEMORYLAYER_LLM_PROFILE_DEFAULT_MODEL: memorylayer-default
       MEMORYLAYER_LLM_PROFILE_DEFAULT_BASE_URL: http://gateway:8080/v1
@@ -932,6 +936,10 @@ services:
       # Canonical page files use direct HTTP storage; Aether carries descriptors.
       MEMORYLAYER_SOURCE_FILES_FETCH_URL: http://storage-download:8080
       MEMORYLAYER_TENANT_ID: beta
+      MEMORYLAYER_BLOB_STORAGE_SERVICE: ${MEMORYLAYER_BLOB_STORAGE_SERVICE_BETA:-default}
+      MEMORYLAYER_BLOBGW_URL: http://blobgw:8080
+      MEMORYLAYER_BLOBGW_DOMAIN: beta
+      MEMORYLAYER_BLOBGW_EDGE_URL: http://storage-edge:8090
       MEMORYLAYER_LLM_PROFILE_DEFAULT_PROVIDER: openai
       MEMORYLAYER_LLM_PROFILE_DEFAULT_MODEL: memorylayer-default
       MEMORYLAYER_LLM_PROFILE_DEFAULT_BASE_URL: http://gateway:8080/v1
