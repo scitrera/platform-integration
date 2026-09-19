@@ -141,13 +141,13 @@ images:
     availability: verified in local Docker engine; registry publication not established
     source_set: memorylayer-enterprise-9b4843491c4b4e4f
   EDGE_IMAGE:
-    tag: platform-integration/edge:22d3b7679ec59f40
-    local_image_id: sha256:0b116ebf87b647b4043011e1abf6c0ed12be409cccc39b78b240d17e6c9ee11e
+    tag: platform-integration/edge:3b3c5e83013b05b1
+    local_image_id: sha256:ac0672bb3aaca1075c58f840cfb182384e1e0eb34fbfb9bf5316ede6451e8bab
     os: linux
     architecture: arm64
     registry_manifest_digests: []
     availability: Verified in local Docker engine; registry publication not established
-    source_set: memorylayer-storage-22d3b7679ec59f40
+    source_set: memorylayer-storage-3b3c5e83013b05b1
   BLOBGW_IMAGE:
     tag: platform-integration/blobgw:88274bd9b3fa5b7d
     local_image_id: sha256:cd5c0fa090e2fa8382ea57638abb140dd1bbdcd6b076f9651aa476ea43d10b11
@@ -342,6 +342,16 @@ source_sets:
     tracked_content_sha256: d60e78f14cfc60008c9556f3b6ebe8ce19f35932a379d9cb181ff065fb249a7c
     dirty: false
     reviewed_file_count: 597
+    include_untracked: []
+    availability: Built from local main source; upstream publication tracked by owning
+      repository
+  memorylayer-storage-3b3c5e83013b05b1:
+    component: memorylayer-storage
+    repository: https://github.com/scitrera/memorylayer-storage.git
+    revision: 10b01e9e2bce5e7b671ced054e538a9773de694a
+    tracked_content_sha256: 3b3c5e83013b05b140ec7f517246ad5182d79a6c02da723bae2b78ea362bb2e1
+    dirty: false
+    reviewed_file_count: 564
     include_untracked: []
     availability: Built from local main source; upstream publication tracked by owning
       repository
