@@ -8,7 +8,8 @@ and stamps the current auth-go tenant/user. Do not expose edge capability mintin
 or the internal blob gateway directly to browsers.
 
 The MemoryLayer browser endpoint requires canonical tenant-scoped blobgw storage
-and an edge revision that enforces GET/HEAD `content_hash`. It returns 120-second,
+with HTTP tenant routing enabled by `-tenant-config`, and an edge revision that
+enforces GET/HEAD `content_hash`. It returns 120-second,
 user-bound links with no-store responses. The frontend loads only nearby images.
 
 ## Configuration and migration
@@ -25,7 +26,8 @@ Before changing an existing installation, stop ingestion, copy and verify all
 local canonical blobs using MemoryLayer enterprise's
 `scripts/migrate_document_blobs.py`, keeping their original base path. Retain the
 local volume. Do not change the provider until every destination object has been
-read back and hash-verified. See the enterprise `docs/source-page-delivery.md`
+read back and hash-verified in the intended tenant domain (verified by
+`X-Blobgw-Domain`, including a read-only preflight before any writes). See the enterprise `docs/source-page-delivery.md`
 for the command and rollback procedure. Existing source-file descriptors used by
 agent task-local materialization remain supported.
 

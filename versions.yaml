@@ -109,13 +109,13 @@ images:
     availability: verified in local Docker engine; registry publication not established
     source_set: platform-backend-60dece1d39c0b694
   MEMORYLAYER_IMAGE:
-    tag: platform-integration/memorylayer:d60e78f14cfc6000
-    local_image_id: sha256:3f4f9d634e2cb10ba0906d6f71c72ec5b4d84c0d02bc0b888803ef52609c6b4e
+    tag: platform-integration/memorylayer:2e559ee078d31ba3
+    local_image_id: sha256:a3f8e390370fa2f1a4bcf80e256a0b9c5ff0c74b7b8d9243221de413b82a27ba
     os: linux
     architecture: arm64
     registry_manifest_digests: []
     availability: Verified in local Docker engine; registry publication not established
-    source_set: memorylayer-enterprise-d60e78f14cfc6000
+    source_set: memorylayer-enterprise-2e559ee078d31ba3
   CONNECTORS_IMAGE:
     tag: platform-integration/connectors:9b4843491c4b4e4f
     local_image_id: sha256:f9a2f04c864ab4f916838f54f8b16ea13bbdfe3261b766d143be8d195284ccf7
@@ -141,21 +141,21 @@ images:
     availability: verified in local Docker engine; registry publication not established
     source_set: memorylayer-enterprise-9b4843491c4b4e4f
   EDGE_IMAGE:
-    tag: platform-integration/edge:3b3c5e83013b05b1
-    local_image_id: sha256:ac0672bb3aaca1075c58f840cfb182384e1e0eb34fbfb9bf5316ede6451e8bab
+    tag: platform-integration/edge:dc5ee08737babe87
+    local_image_id: sha256:f3a867c8e4f0c2c2beea491c4dd06b63e47c769f82a44388579fe92f01398c1c
     os: linux
     architecture: arm64
     registry_manifest_digests: []
     availability: Verified in local Docker engine; registry publication not established
-    source_set: memorylayer-storage-3b3c5e83013b05b1
+    source_set: memorylayer-storage-dc5ee08737babe87
   BLOBGW_IMAGE:
-    tag: platform-integration/blobgw:88274bd9b3fa5b7d
-    local_image_id: sha256:cd5c0fa090e2fa8382ea57638abb140dd1bbdcd6b076f9651aa476ea43d10b11
+    tag: platform-integration/blobgw:dc5ee08737babe87
+    local_image_id: sha256:11c1932b2769cdc8eb77d95052e4b2bd2e6dea559e606f5b5132a49c50af295b
     os: linux
     architecture: arm64
     registry_manifest_digests: []
-    availability: verified in local Docker engine; registry publication not established
-    source_set: memorylayer-storage-88274bd9b3fa5b7d
+    availability: Verified in local Docker engine; registry publication not established
+    source_set: memorylayer-storage-dc5ee08737babe87
   AUTH_IMAGE:
     tag: ghcr.io/scitrera/scitrera-auth-go:0.1.3@sha256:4debc51c5af88af52a4a31a1ff350b67ea47cd7c9d554f8345f1c67bf0a8b319
     version: 0.1.3
@@ -364,6 +364,24 @@ source_sets:
     reviewed_file_count: 1791
     include_untracked: []
     availability: Built from local main; repository publication not configured
+  memorylayer-storage-dc5ee08737babe87:
+    component: memorylayer-storage
+    repository: https://github.com/scitrera/memorylayer-storage.git
+    revision: 7278dc2fcca01bb1b4fec33ef87d5245a9814170
+    tracked_content_sha256: dc5ee08737babe870d8c645c42a5d869f28219a51d29702c3953daf8f110e00f
+    dirty: false
+    reviewed_file_count: 566
+    include_untracked: []
+    availability: Published on upstream main; local image built from this clean commit
+  memorylayer-enterprise-2e559ee078d31ba3:
+    component: memorylayer-enterprise
+    repository: https://github.com/scitrera/memorylayer-enterprise.git
+    revision: d45180f42e2d5b919a8afb2d629f02ed876d3306
+    tracked_content_sha256: 2e559ee078d31ba3a954030ca43918200eab0a4a96b04db1e8e28e8ac5747f38
+    dirty: false
+    reviewed_file_count: 597
+    include_untracked: []
+    availability: Published on upstream main; local image built from this clean commit
 upstream_changes:
   sahara-oss:
     pull_request: https://github.com/scitrera/agent-harness-go/pull/1
