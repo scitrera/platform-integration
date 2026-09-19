@@ -172,13 +172,13 @@ images:
     verified_date: '2026-09-15'
     source_set: auth-go-dd4d9dc5b6ee2252
   WEB_IMAGE:
-    tag: platform-integration/web:f04187580a7c121a
-    local_image_id: sha256:726859ccfe86ba1c4e77321d23d0277ea271cc0143525c67fcfcfe485c9749cb
+    tag: platform-integration/web:9de6095ee5b71940
+    local_image_id: sha256:863034650fabf5d538f5115c7db8d6079bd0356fe146ce22e6fc497dcd99046c
     os: linux
     architecture: arm64
     registry_manifest_digests: []
     availability: Verified in local Docker engine; registry publication not established
-    source_set: platform-frontend-f04187580a7c121a
+    source_set: platform-frontend-9de6095ee5b71940
     matching_source_archive:
       url_path: /source.tar.gz
       sha256: a6e4dbf72617f3f794a8d2632f3821282d2e747a3effb776389ecffe90843296
@@ -382,6 +382,15 @@ source_sets:
     reviewed_file_count: 597
     include_untracked: []
     availability: Published on upstream main; local image built from this clean commit
+  platform-frontend-9de6095ee5b71940:
+    component: platform-frontend
+    repository: https://github.com/scitrera/platform-frontend.git
+    revision: d876a2c50eb178d89f31421ee5a6eddc156ffbd0
+    tracked_content_sha256: 9de6095ee5b7194047bbfef98b964dfd41c375266b13136d8a6ea39c2634ed51
+    dirty: false
+    reviewed_file_count: 431
+    include_untracked: []
+    availability: Built from local main; repository publication not configured
 upstream_changes:
   sahara-oss:
     pull_request: https://github.com/scitrera/agent-harness-go/pull/1
