@@ -172,13 +172,13 @@ images:
     verified_date: '2026-09-15'
     source_set: auth-go-dd4d9dc5b6ee2252
   WEB_IMAGE:
-    tag: platform-integration/web:9de6095ee5b71940
-    local_image_id: sha256:863034650fabf5d538f5115c7db8d6079bd0356fe146ce22e6fc497dcd99046c
+    tag: platform-integration/web:8c12bfc97bf4de08
+    local_image_id: sha256:3e35751d456360dc27088b15ed360cdc8dea91a1bc68de3eb222df0343de57aa
     os: linux
     architecture: arm64
     registry_manifest_digests: []
     availability: Verified in local Docker engine; registry publication not established
-    source_set: platform-frontend-9de6095ee5b71940
+    source_set: platform-frontend-8c12bfc97bf4de08
     matching_source_archive:
       url_path: /source.tar.gz
       sha256: a6e4dbf72617f3f794a8d2632f3821282d2e747a3effb776389ecffe90843296
@@ -389,6 +389,14 @@ source_sets:
     tracked_content_sha256: 9de6095ee5b7194047bbfef98b964dfd41c375266b13136d8a6ea39c2634ed51
     dirty: false
     reviewed_file_count: 431
+    include_untracked: []
+    availability: Built from local main; repository publication not configured
+  platform-frontend-8c12bfc97bf4de08:
+    component: platform-frontend
+    revision: 1102f31d00dad5fafaa1be968c5b1a2eb03e37a4
+    tracked_content_sha256: 8c12bfc97bf4de085b22309ce42a6678478fb3e4e4aa30c2160ca203c3c6d266
+    dirty: false
+    reviewed_file_count: 433
     include_untracked: []
     availability: Built from local main; repository publication not configured
 upstream_changes:
