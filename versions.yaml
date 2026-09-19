@@ -172,13 +172,13 @@ images:
     verified_date: '2026-09-15'
     source_set: auth-go-dd4d9dc5b6ee2252
   WEB_IMAGE:
-    tag: platform-integration/web:8c12bfc97bf4de08
-    local_image_id: sha256:3e35751d456360dc27088b15ed360cdc8dea91a1bc68de3eb222df0343de57aa
+    tag: platform-integration/web:f2ae9bcfa46a3341
+    local_image_id: sha256:411ab1ccad47bd0a60510ec214bdba368e44ab2ef3b0100e80b9160d037665ab
     os: linux
     architecture: arm64
     registry_manifest_digests: []
     availability: Verified in local Docker engine; registry publication not established
-    source_set: platform-frontend-8c12bfc97bf4de08
+    source_set: platform-frontend-f2ae9bcfa46a3341
     matching_source_archive:
       url_path: /source.tar.gz
       sha256: a6e4dbf72617f3f794a8d2632f3821282d2e747a3effb776389ecffe90843296
@@ -395,6 +395,14 @@ source_sets:
     component: platform-frontend
     revision: 1102f31d00dad5fafaa1be968c5b1a2eb03e37a4
     tracked_content_sha256: 8c12bfc97bf4de085b22309ce42a6678478fb3e4e4aa30c2160ca203c3c6d266
+    dirty: false
+    reviewed_file_count: 433
+    include_untracked: []
+    availability: Built from local main; repository publication not configured
+  platform-frontend-f2ae9bcfa46a3341:
+    component: platform-frontend
+    revision: e26481f6ea79ec672af9d8eb3c6237e567a473c0
+    tracked_content_sha256: f2ae9bcfa46a3341bf1010797803013938550073b938dac493ade46b9c8879ab
     dirty: false
     reviewed_file_count: 433
     include_untracked: []
