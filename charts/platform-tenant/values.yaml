@@ -60,7 +60,16 @@ databaseResources:
   limits:
     cpu: '2'
     memory: 1Gi
-roleResources: {}
+# AetherLite's default Go budget is 1 GiB; mapped files and other memory need
+# container headroom. Operators must size this for their measured replay/data set.
+roleResources:
+  aether:
+    requests:
+      cpu: 100m
+      memory: 512Mi
+    limits:
+      cpu: '2'
+      memory: 2Gi
 quota:
   enabled: true
   hard:

@@ -73,6 +73,13 @@ def main():
                     if kind == "storage" and obj["kind"] == "ConfigMap" and obj["metadata"]["name"] == "example-download":
                         conf = obj["data"]["nginx.conf"]
                         assert "limit_except PUT" in conf and "$request_uri $artifact_upload_path" in conf
+                    if kind == "tenant" and obj["kind"] == "ConfigMap" and obj["metadata"]["name"] == "example-bootstrap":
+                        aether = json.loads(obj["data"]["aether.yaml"])
+                        assert aether["admin"]["tls_cert_file"] == aether["gateway"]["tls"]["cert_file"]
+                        assert aether["admin"]["tls_key_file"] == aether["gateway"]["tls"]["key_file"]
+                        assert not aether["admin"].get("insecure_no_auth")
+                    if kind == "tenant" and obj["kind"] == "Deployment" and obj["metadata"]["name"] == "example-aether":
+                        assert obj["spec"]["template"]["spec"]["containers"][0]["resources"] == values["roleResources"]["aether"]
                     if kind == "tenant" and obj["kind"] == "ConfigMap" and obj["metadata"]["name"] == "example-work-profiles":
                         registry = json.loads(obj["data"]["profiles.json"])
                         assert registry["profiles"] == values["workProfiles"]["profiles"]

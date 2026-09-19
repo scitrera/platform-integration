@@ -209,3 +209,10 @@ files are preserved by configuration: when upgrading, add `admin.tls_cert_file`
 server refuses to start an administration listener that has an API key. The
 gRPC gateway and operations health/metrics listener are independent. Keep
 the administration listener private and validate its tenant CA when connecting.
+
+The tenant Helm chart gives Aether a separate `roleResources.aether` default
+(512 MiB request, 2 GiB container limit) to leave headroom above its 1 GiB Go
+budget. This is a starting configuration, not a qualified maximum for every
+data/replay workload. Override it using measured total container demand; lowering
+`GOMEMLIMIT` does not bound mapped files. Compose leaves the hard limit to the
+operator's overlay.
