@@ -109,13 +109,13 @@ images:
     availability: verified in local Docker engine; registry publication not established
     source_set: platform-backend-60dece1d39c0b694
   MEMORYLAYER_IMAGE:
-    tag: platform-integration/memorylayer:c75b5deaff53b505
-    local_image_id: sha256:e062d65f44cf06a118c4f0386e9af0ad27904dae6409bbe97c018569c521ac56
+    tag: platform-integration/memorylayer:d60e78f14cfc6000
+    local_image_id: sha256:3f4f9d634e2cb10ba0906d6f71c72ec5b4d84c0d02bc0b888803ef52609c6b4e
     os: linux
     architecture: arm64
     registry_manifest_digests: []
     availability: Verified in local Docker engine; registry publication not established
-    source_set: memorylayer-enterprise-c75b5deaff53b505
+    source_set: memorylayer-enterprise-d60e78f14cfc6000
   CONNECTORS_IMAGE:
     tag: platform-integration/connectors:9b4843491c4b4e4f
     local_image_id: sha256:f9a2f04c864ab4f916838f54f8b16ea13bbdfe3261b766d143be8d195284ccf7
@@ -332,6 +332,16 @@ source_sets:
     tracked_content_sha256: 22d3b7679ec59f4072fff0fa83a9a7eab4199ef9c0bc1e10c1def7ac662ce811
     dirty: false
     reviewed_file_count: 564
+    include_untracked: []
+    availability: Built from local main source; upstream publication tracked by owning
+      repository
+  memorylayer-enterprise-d60e78f14cfc6000:
+    component: memorylayer-enterprise
+    repository: https://github.com/scitrera/memorylayer-enterprise.git
+    revision: ef83936a554b937730a3fc48c7a73c067439306d
+    tracked_content_sha256: d60e78f14cfc60008c9556f3b6ebe8ce19f35932a379d9cb181ff065fb249a7c
+    dirty: false
+    reviewed_file_count: 597
     include_untracked: []
     availability: Built from local main source; upstream publication tracked by owning
       repository
