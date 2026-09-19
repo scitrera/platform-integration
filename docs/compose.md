@@ -185,3 +185,18 @@ To show a picker instead of selecting the first accessible workspace, also set
 tenant `uiConfig.autoSelectWorkspace=false` using platform provisioning. The
 frontend defaults this flag to true for existing deployments. Direct workspace
 URLs remain explicit selections.
+
+## AetherLite memory budget
+
+The pinned Aether revision includes on-demand Badger replay/KV reads and a
+default 1 GiB Go runtime memory budget. This is a soft garbage-collector budget,
+not an RSS or container limit: mapped database files, native allocations and
+other non-Go memory need additional headroom. Measure representative replay
+and ingestion before choosing a VM or imposing a hard container limit.
+
+To override the runtime budget, set `GOMEMLIMIT` on the tenant's Aether service
+in a Compose overlay (for example `768MiB` or `2GiB`). In Helm, add it to the
+Aether environment Secret. An explicit value is preserved by AetherLite;
+`off` disables the budget. The effective value is logged at startup. The
+standalone gateway is unaffected. Image/source pins are in `versions.yaml`;
+local image IDs are engine-specific and do not establish registry publication.

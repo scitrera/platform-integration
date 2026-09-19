@@ -183,13 +183,13 @@ images:
       url_path: /source.tar.gz
       sha256: fcc1fa388710789ce6491ac40d96e89e4da9ba7f6f9f3006d0c8535206195c7d
   AETHER_IMAGE:
-    tag: platform-integration/aether:42166abdce4a0322
-    local_image_id: sha256:66e0350ea74f30ec983b3008ff1690cd0cb224a265d8f0b25bfdad0fc182f853
+    tag: platform-integration/aether:7935c06d344578d2
+    local_image_id: sha256:307c94a825f0642a6d1e197654e3d5c0c21143caf3bec85d92db2efbfa333de0
     os: linux
     architecture: arm64
     registry_manifest_digests: []
     availability: verified in local Docker engine; registry publication not established
-    source_set: aether-42166abdce4a0322
+    source_set: aether-7935c06d344578d2
   SPARKROUTE_IMAGE:
     tag: platform-integration/platform-sparkroute:29b5c3c6d5a11a90
     local_image_id: sha256:a17be5cdf65a10d6072682a8fc0cbaa7ccf01ab4eb7fd1f5a6ad0ac791c73738
@@ -285,13 +285,23 @@ source_sets:
     include_untracked: []
     availability: upstream source available anonymously
     upstream_pr: https://github.com/scitrera/aether/pull/7
+  aether-7935c06d344578d2:
+    component: aether
+    repository: https://github.com/scitrera/aether
+    revision: bda0a8c0d2e7e21246d5e5198689f33bed6ca218
+    tracked_content_sha256: 7935c06d344578d2aa75906121054551da43869594918315a551462583e82e6d
+    dirty: false
+    reviewed_file_count: 1152
+    include_untracked: []
+    availability: upstream source published on main; PR 10 merged
+    upstream_pr: https://github.com/scitrera/aether/pull/10
 upstream_changes:
   sahara-oss:
     pull_request: https://github.com/scitrera/agent-harness-go/pull/1
     status: draft; not merged
   aether:
-    pull_request: https://github.com/scitrera/aether/pull/7
-    status: draft; not merged
+    pull_request: https://github.com/scitrera/aether/pull/10
+    status: merged to main; bounded replay/KV reads and default 1 GiB Go memory budget
   memorylayer-enterprise:
     pull_request: https://github.com/scitrera/memorylayer-enterprise/pull/2
     status: draft; not merged
