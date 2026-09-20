@@ -172,16 +172,16 @@ images:
     verified_date: '2026-09-15'
     source_set: auth-go-dd4d9dc5b6ee2252
   WEB_IMAGE:
-    tag: platform-integration/web:1ade07eec018cdc9
-    local_image_id: sha256:4e7f59451997e85f42cda01b078d3be6ac4e663f52ab9def1564dd7b5c17faeb
+    tag: platform-integration/web:32c6f8c3f09671ea
+    local_image_id: sha256:481c94a91fc48c0e02ab5fb66b55e36a251c8b187815eb4aa164be2feebf76ab
     os: linux
     architecture: arm64
     registry_manifest_digests: []
     availability: Verified in local Docker engine; registry publication not established
-    source_set: platform-frontend-1ade07eec018cdc9
+    source_set: platform-frontend-32c6f8c3f09671ea
     matching_source_archive:
       url_path: /source.tar.gz
-      sha256: bed6848208f0f6d1985ad8e1f7c93c3240d621f73f71b18804de02b197653db8
+      sha256: 89c0311dc2f023d30c4f758e011e3df218de66a6b31bb43e22354ddb3d4d41b3
   AETHER_IMAGE:
     tag: platform-integration/aether:7935c06d344578d2
     local_image_id: sha256:307c94a825f0642a6d1e197654e3d5c0c21143caf3bec85d92db2efbfa333de0
@@ -434,6 +434,15 @@ source_sets:
     reviewed_file_count: 600
     include_untracked: []
     availability: Published upstream main, Python and npm CI passed
+  platform-frontend-32c6f8c3f09671ea:
+    component: platform-frontend
+    repository: https://github.com/scitrera/platform-frontend.git
+    revision: 83cabca2bd9eb92abf03c67d23b4c3f341204193
+    tracked_content_sha256: 32c6f8c3f09671eaf76e41995aff5ab47d66219255e91fbb2e16d3ceab9e621a
+    dirty: false
+    reviewed_file_count: 434
+    include_untracked: []
+    availability: Local main commit; repository publication pending
 upstream_changes:
   sahara-oss:
     pull_request: https://github.com/scitrera/agent-harness-go/pull/1
