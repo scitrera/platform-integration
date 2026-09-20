@@ -1,0 +1,78 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "development": {
+      "type": "boolean"
+    },
+    "image": {
+      "type": "string"
+    },
+    "masterName": {
+      "type": "string",
+      "pattern": "^[a-zA-Z0-9_-]+$"
+    },
+    "allowEmptyBootstrap": {
+      "type": "boolean"
+    },
+    "storageClass": {
+      "type": "string"
+    },
+    "nodeSelector": {
+      "type": "object"
+    },
+    "tolerations": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      }
+    },
+    "sentinelNodeSelector": {
+      "type": "object"
+    },
+    "sentinelTolerations": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      }
+    },
+    "dataStorage": {
+      "type": "string"
+    },
+    "sentinelStorage": {
+      "type": "string"
+    },
+    "maxmemory": {
+      "type": "string",
+      "pattern": "^[1-9][0-9]*(kb|mb|gb)$"
+    },
+    "dataResources": {
+      "type": "object"
+    },
+    "sentinelResources": {
+      "type": "object"
+    },
+    "authRelease": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9-]*$"
+    }
+  },
+  "required": [
+    "development",
+    "image",
+    "masterName",
+    "allowEmptyBootstrap",
+    "storageClass",
+    "nodeSelector",
+    "tolerations",
+    "sentinelNodeSelector",
+    "sentinelTolerations",
+    "dataStorage",
+    "sentinelStorage",
+    "maxmemory",
+    "dataResources",
+    "sentinelResources",
+    "authRelease"
+  ]
+}

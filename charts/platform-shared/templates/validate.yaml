@@ -4,3 +4,7 @@
 {{- if not (regexMatch "@sha256:[a-f0-9]{64}$" $image) }}
 {{- fail (printf "production images.%s must use a registry manifest digest" $name) }}
 {{- end }}{{- end }}{{- end }}
+
+{{- if ne (empty .Values.authSession.sentinel.master) (empty .Values.authSession.sentinel.addresses) }}
+{{- fail "authSession.sentinel requires both master and addresses" }}
+{{- end }}

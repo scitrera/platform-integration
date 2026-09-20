@@ -1,0 +1,42 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ .Release.Name }}-sessions
+spec:
+  podSelector:
+    matchLabels: {app.kubernetes.io/instance: {{ .Release.Name }}}
+  policyTypes: [Ingress, Egress]
+  ingress:
+  - from:
+    - podSelector:
+        matchLabels: {app.kubernetes.io/instance: {{ .Release.Name }}}
+    - podSelector:
+        matchLabels:
+          app.kubernetes.io/instance: {{ .Values.authRelease }}
+          app.kubernetes.io/component: auth
+    ports: [{protocol: TCP, port: 6379}, {protocol: TCP, port: 26379}]
+  egress:
+  - to:
+    - podSelector:
+        matchLabels: {app.kubernetes.io/instance: {{ .Release.Name }}}
+    ports: [{protocol: TCP, port: 6379}, {protocol: TCP, port: 26379}]
+  - to:
+    - namespaceSelector:
+        matchLabels: {kubernetes.io/metadata.name: kube-system}
+    ports: [{protocol: UDP, port: 53}, {protocol: TCP, port: 53}]
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ .Release.Name }}-auth-sessions
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/instance: {{ .Values.authRelease }}
+      app.kubernetes.io/component: auth
+  policyTypes: [Egress]
+  egress:
+  - to:
+    - podSelector:
+        matchLabels: {app.kubernetes.io/instance: {{ .Release.Name }}}
+    ports: [{protocol: TCP, port: 6379}, {protocol: TCP, port: 26379}]

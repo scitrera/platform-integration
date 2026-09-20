@@ -1,0 +1,132 @@
+{{- range $role := list "data" "sentinel" }}
+{{- $sentinel := eq $role "sentinel" }}
+{{- $name := printf "%s-%s" $.Release.Name $role }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $name }}
+spec:
+  clusterIP: None
+  publishNotReadyAddresses: true
+  selector:
+    app.kubernetes.io/instance: {{ $.Release.Name }}
+    app.kubernetes.io/component: {{ $role }}
+  ports:
+  - name: valkey
+    port: {{ if $sentinel }}26379{{ else }}6379{{ end }}
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ $name }}
+spec:
+  replicas: {{ if $sentinel }}3{{ else }}2{{ end }}
+  serviceName: {{ $name }}
+  podManagementPolicy: Parallel
+  selector:
+    matchLabels:
+      app.kubernetes.io/instance: {{ $.Release.Name }}
+      app.kubernetes.io/component: {{ $role }}
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/instance: {{ $.Release.Name }}
+        app.kubernetes.io/component: {{ $role }}
+      annotations:
+        checksum/start: {{ $.Files.Get "files/start.sh" | sha256sum }}
+    spec:
+      automountServiceAccountToken: false
+      terminationGracePeriodSeconds: 30
+      nodeSelector:
+{{ toYaml (ternary $.Values.sentinelNodeSelector $.Values.nodeSelector $sentinel) | indent 8 }}
+      tolerations:
+{{ toYaml (ternary $.Values.sentinelTolerations $.Values.tolerations $sentinel) | indent 8 }}
+      affinity:
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+          - labelSelector:
+              matchLabels:
+                app.kubernetes.io/instance: {{ $.Release.Name }}
+                app.kubernetes.io/component: {{ $role }}
+            topologyKey: kubernetes.io/hostname
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+        seccompProfile: {type: RuntimeDefault}
+      containers:
+      - name: valkey
+        image: {{ $.Values.image | quote }}
+        command: [sh, /config/start.sh]
+        env:
+        - {name: ROLE, value: {{ $role }}}
+        - {name: HEADLESS, value: {{ $name }}}
+        - {name: MASTER, value: {{ $.Values.masterName | quote }}}
+        - {name: DATA_PRIMARY, value: '{{ $.Release.Name }}-data-0.{{ $.Release.Name }}-data'}
+        - {name: DATA_PREFIX, value: '{{ $.Release.Name }}-data'}
+        - {name: DATA_HEADLESS, value: '{{ $.Release.Name }}-data'}
+        - {name: SENTINEL_PREFIX, value: '{{ $.Release.Name }}-sentinel'}
+        - {name: SENTINEL_HEADLESS, value: '{{ $.Release.Name }}-sentinel'}
+        - {name: ALLOW_EMPTY_BOOTSTRAP, value: {{ $.Values.allowEmptyBootstrap | toString | quote }}}
+        - {name: MAXMEMORY, value: {{ $.Values.maxmemory | quote }}}
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities: {drop: [ALL]}
+        resources:
+{{ toYaml (ternary $.Values.sentinelResources $.Values.dataResources $sentinel) | indent 10 }}
+        volumeMounts:
+        - {name: state, mountPath: /data}
+        - {name: tmp, mountPath: /tmp}
+        - {name: config, mountPath: /config, readOnly: true}
+        startupProbe:
+          exec:
+            command: [sh, -ec, 'test "$(valkey-cli -p {{ if $sentinel }}26379{{ else }}6379{{ end }} ping)" = PONG']
+          periodSeconds: 5
+          failureThreshold: 120
+          timeoutSeconds: 3
+        readinessProbe:
+          exec:
+            command:
+            - sh
+            - -ec
+{{- if $sentinel }}
+            - 'valkey-cli -p 26379 SENTINEL ckquorum "$MASTER" | grep -q "^OK"'
+{{- else }}
+            - 'valkey-cli INFO replication | grep -Eq "^role:master|^master_link_status:up"'
+{{- end }}
+          periodSeconds: 5
+          timeoutSeconds: 3
+        livenessProbe:
+          exec:
+            command: [sh, -ec, 'test "$(valkey-cli -p {{ if $sentinel }}26379{{ else }}6379{{ end }} ping)" = PONG']
+          periodSeconds: 15
+          timeoutSeconds: 3
+          failureThreshold: 6
+      volumes:
+      - {name: tmp, emptyDir: {}}
+      - name: config
+        configMap: {name: '{{ $.Release.Name }}-start'}
+  volumeClaimTemplates:
+  - metadata:
+      name: state
+    spec:
+      accessModes: [ReadWriteOnce]
+      storageClassName: {{ $.Values.storageClass | quote }}
+      resources:
+        requests:
+          storage: {{ ternary $.Values.sentinelStorage $.Values.dataStorage $sentinel }}
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ $name }}
+spec:
+  minAvailable: {{ if $sentinel }}2{{ else }}1{{ end }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/instance: {{ $.Release.Name }}
+      app.kubernetes.io/component: {{ $role }}
+{{- end }}

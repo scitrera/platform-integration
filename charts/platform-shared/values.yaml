@@ -70,7 +70,14 @@ tolerations: []
 authEndpoint:
   verify: ''
   external: ''
+# Auth replicas can tolerate a separate shared Spot pool without moving billing.
+authReplicas: 1
+authTolerations: []
 authSession:
+  # External Sentinel-managed Valkey. Empty addresses retain the standalone store.
+  sentinel:
+    master: ''
+    addresses: []
   ttl: 24h
   cookieDomain: ''
   defaultTenant: ''

@@ -1,4 +1,4 @@
-{{- if .Values.components.auth }}
+{{- if and .Values.components.auth (not .Values.authSession.sentinel.addresses) }}
 # SPDX-License-Identifier: AGPL-3.0-only
 {{- if ge (int .Values.phase) 0 }}
 apiVersion: apps/v1

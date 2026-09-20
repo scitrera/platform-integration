@@ -20,6 +20,11 @@ spec:
   resources:
 {{ toYaml .Values.resources | indent 4 }}
   affinity:
+{{- if .Values.requirePodAntiAffinity }}
+    enablePodAntiAffinity: true
+    podAntiAffinityType: required
+    topologyKey: kubernetes.io/hostname
+{{- end }}
     nodeSelector:
 {{ toYaml .Values.nodeSelector | indent 6 }}
     tolerations:

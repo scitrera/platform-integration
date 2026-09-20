@@ -1,0 +1,10 @@
+{{- if and (not .Values.development) (not (regexMatch "@sha256:[a-f0-9]{64}$" .Values.image)) }}
+{{- fail "production session image must use a registry manifest digest" }}
+{{- end }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ .Release.Name }}-start
+data:
+  start.sh: |
+{{ .Files.Get "files/start.sh" | indent 4 }}

@@ -1,0 +1,21 @@
+development: false
+image: ''
+masterName: sessions
+# Use only for first installation into empty PVCs. Turn off before exposing auth.
+allowEmptyBootstrap: false
+storageClass: ''
+nodeSelector: {}
+tolerations: []
+sentinelNodeSelector: {}
+sentinelTolerations: []
+dataStorage: 5Gi
+sentinelStorage: 1Gi
+maxmemory: 128mb
+dataResources:
+  requests: {cpu: 100m, memory: 64Mi}
+  limits: {cpu: '1', memory: 384Mi}
+sentinelResources:
+  requests: {cpu: 25m, memory: 16Mi}
+  limits: {cpu: '0.25', memory: 64Mi}
+# Same-namespace auth clients only. Voters cannot access application databases.
+authRelease: shared-auth

@@ -7,6 +7,8 @@ resources:
   limits: {cpu: "2", memory: 1536Mi}
 nodeSelector: {}
 tolerations: []
+# Keep independent replicas on separate hosts; requires enough eligible nodes.
+requirePodAntiAffinity: false
 serviceAccountAnnotations: {}
 maxConnections: 120
 # Each database has a distinct LOGIN role and pre-created credentials Secret

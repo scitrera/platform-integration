@@ -10,9 +10,12 @@ metadata:
     app.kubernetes.io/component: auth
     platform.scitrera.io/trust: service
 spec:
-  replicas: 1
+  replicas: {{ .Values.authReplicas }}
   strategy:
-    type: Recreate
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: {{ if gt (int .Values.authReplicas) 1 }}1{{ else }}0{{ end }}
   selector:
     matchLabels:
       app.kubernetes.io/instance: {{ .Release.Name }}
@@ -28,7 +31,17 @@ spec:
       nodeSelector:
 {{ toYaml $.Values.nodeSelector | indent 8 }}
       tolerations:
-{{ toYaml $.Values.tolerations | indent 8 }}
+{{ toYaml (concat $.Values.tolerations $.Values.authTolerations) | indent 8 }}
+{{- if gt (int .Values.authReplicas) 1 }}
+      affinity:
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+          - labelSelector:
+              matchLabels:
+                app.kubernetes.io/instance: {{ .Release.Name }}
+                app.kubernetes.io/component: auth
+            topologyKey: kubernetes.io/hostname
+{{- end }}
       serviceAccountName: {{ .Release.Name }}-runtime
       automountServiceAccountToken: false
       securityContext:
@@ -73,14 +86,19 @@ spec:
           value: verify
         - name: AUTH_PROXY_LISTEN_ADDR
           value: :8080
-        - name: AUTH_PROXY_REDIS_ADDR
-          value: {{ .Release.Name }}-sessions:6379
         - name: AUTH_PROXY_SESSION_TTL
           value: {{ .Values.authSession.ttl | quote }}
         - name: AUTH_PROXY_SESSION_STORE
           value: redis
+{{- if .Values.authSession.sentinel.addresses }}
+        - name: AUTH_PROXY_SESSION_SENTINEL_MASTER
+          value: {{ .Values.authSession.sentinel.master | quote }}
+        - name: AUTH_PROXY_SESSION_SENTINEL_ADDRS
+          value: {{ join "," .Values.authSession.sentinel.addresses | quote }}
+{{- else }}
         - name: AUTH_PROXY_SESSION_REDIS_ADDR
           value: {{ .Release.Name }}-sessions:6379
+{{- end }}
         - name: SCITRERA_AUTH_EXTERNAL_ADDR
           value: :8081
         - name: SCITRERA_AUTH_ADMIN_ADDR
@@ -166,4 +184,18 @@ spec:
     port: 8082
     targetPort: 8082
 
+{{- end }}
+
+{{- if and .Values.components.auth (ge (int .Values.phase) 2) (gt (int .Values.authReplicas) 1) }}
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ .Release.Name }}-auth
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/instance: {{ .Release.Name }}
+      app.kubernetes.io/component: auth
 {{- end }}
