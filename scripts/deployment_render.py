@@ -80,6 +80,7 @@ def compose(resolved):
         result = _merge(result, {"services": {"auth": {"environment": {
             "SCITRERA_AUTH_LOGIN_DEFAULT_TENANT": tenant,
             "AUTH_PROXY_SESSION_COOKIE_DOMAIN": config["auth"].get("cookieDomain", ""),
+            "AUTH_PROXY_SESSION_TTL": config["auth"].get("sessionTTL", "24h"),
             "AUTH_PROXY_SESSION_COOKIE_SECURE": str(not config["development"]).lower(),
             "SCITRERA_AUTH_ALLOWED_REDIRECT_ORIGINS": config["public"]["origin"],
         }}}})
@@ -165,6 +166,7 @@ def helm(resolved):
         "authEndpoint": {"verify": verify, "external": external},
         "externalAuthNamespace": shared,
         "authSession": {"cookieDomain": config["auth"].get("cookieDomain", ""), "defaultTenant": tenant,
+                        "ttl": config["auth"].get("sessionTTL", "24h"),
                         "allowedOrigins": [origin]},
         "images": _images(bindings, ["auth", "web", "sparkroute", "postgres", "valkey"], not config["development"]),
         "ingress": {"enabled": k.get("ingressEnabled", True), "createGateway": False, "parentName": k["gatewayName"], "parentNamespace": k["gatewayNamespace"],

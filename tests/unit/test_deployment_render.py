@@ -47,6 +47,17 @@ class DeploymentRenderTests(unittest.TestCase):
     def resolved(self):
         return self.fixture.run_config(self.bindings)
 
+    def test_browser_session_ttl_reaches_compose_and_helm(self):
+        self.fixture.config["auth"].update(mode="local", sessionTTL="8h")
+        resolved = self.resolved()
+        self.assertEqual(compose(resolved)["compose.yaml"]["services"]["auth"]
+                         ["environment"]["AUTH_PROXY_SESSION_TTL"], "8h")
+        self.assertEqual(helm(resolved)["helm/serving.yaml"]["authSession"]["ttl"], "8h")
+        for bad in ("0h", "-1h", "1d", True, "8761h"):
+            self.fixture.config["auth"]["sessionTTL"] = bad
+            with self.subTest(ttl=bad), self.assertRaisesRegex(ValueError, "auth.sessionTTL"):
+                self.resolved()
+
     def test_same_policy_and_no_secret_resolution(self):
         resolved = self.resolved()
         docker, kube = compose(resolved), helm(resolved)

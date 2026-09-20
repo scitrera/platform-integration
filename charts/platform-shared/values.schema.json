@@ -285,6 +285,10 @@
           "items": {
             "type": "string"
           }
+        },
+        "ttl": {
+          "type": "string",
+          "pattern": "^[1-9][0-9]*(s|m|h)$"
         }
       }
     },

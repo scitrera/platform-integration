@@ -195,9 +195,14 @@ def _validate(config):
     path = config["public"]["applicationPath"]
     if not isinstance(path, str) or not re.fullmatch(r"/(?:[a-z0-9-]+)?", path):
         raise ConfigError("Invalid public.applicationPath")
-    _fields(config["auth"], {"mode", "origin", "tenant", "workspace", "protectAllPaths", "cookieDomain"},
+    _fields(config["auth"], {"mode", "origin", "tenant", "workspace", "protectAllPaths", "cookieDomain", "sessionTTL"},
             "auth", {"mode", "origin", "tenant", "workspace", "protectAllPaths"})
     _choice(config["auth"]["mode"], {"local", "shared"}, "auth.mode")
+    ttl = config["auth"].setdefault("sessionTTL", "24h")
+    if not isinstance(ttl, str) or not re.fullmatch(r"[1-9][0-9]*(?:s|m|h)", ttl):
+        raise ConfigError("auth.sessionTTL must be a positive duration such as 8h or 168h")
+    if int(ttl[:-1]) * {"s": 1, "m": 60, "h": 3600}[ttl[-1]] > 365 * 86400:
+        raise ConfigError("auth.sessionTTL must not exceed 365 days")
     config["auth"]["origin"] = _origin(config["auth"]["origin"], "auth.origin", production)
     if config["auth"]["tenant"] != config["tenant"] or not isinstance(config["auth"]["workspace"], str) or not TOKEN.fullmatch(config["auth"]["workspace"]):
         raise ConfigError("Auth scope must match the tenant and a valid workspace")

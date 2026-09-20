@@ -36,3 +36,13 @@ compiled work-profile instructions. Source-version selection is also still in th
 customer bootstrap. These are explicit boundaries, not a generic customer plugin
 framework. Future extractions should have a concrete second caller and keep
 customer policy out of the shared implementation.
+
+### Browser login lifetime
+
+The deployment compiler accepts `auth.sessionTTL` (default `24h`) and renders
+`AUTH_PROXY_SESSION_TTL` for local Compose auth and `authSession.ttl` for the
+shared Helm chart. Positive integer durations in seconds, minutes or hours are
+supported, up to 365 days; use `168h` for seven days. A shared auth operator must
+choose one common lifetime across tenants. This fixed sign-in lifetime does not
+extend existing sessions when configuration changes. It is distinct from task
+authority and operator-dashboard TTLs.

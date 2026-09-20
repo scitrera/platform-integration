@@ -75,6 +75,8 @@ spec:
           value: :8080
         - name: AUTH_PROXY_REDIS_ADDR
           value: {{ .Release.Name }}-sessions:6379
+        - name: AUTH_PROXY_SESSION_TTL
+          value: {{ .Values.authSession.ttl | quote }}
         - name: AUTH_PROXY_SESSION_STORE
           value: redis
         - name: AUTH_PROXY_SESSION_REDIS_ADDR

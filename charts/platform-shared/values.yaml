@@ -71,6 +71,7 @@ authEndpoint:
   verify: ''
   external: ''
 authSession:
+  ttl: 24h
   cookieDomain: ''
   defaultTenant: ''
   allowedOrigins: []
