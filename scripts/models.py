@@ -102,13 +102,18 @@ def managed(root):
 
 
 def compile_config(path, tenant, environ=None, previous=None):
-    token(tenant, "tenant")
-    environ = os.environ if environ is None else environ
-    previous = previous or {}
     try:
         doc = yaml.load(path.read_text(), Loader=UniqueLoader)
     except yaml.YAMLError:
         raise ModelConfigError("Invalid model YAML; check indentation and syntax") from None
+    return compile_document(doc, tenant, environ=environ, previous=previous)
+
+
+def compile_document(doc, tenant, environ=None, previous=None, *, references_only=False):
+    """Compile model policy for any runtime without reading secrets in reference mode."""
+    token(tenant, "tenant")
+    environ = {} if references_only else (os.environ if environ is None else environ)
+    previous = previous or {}
     fields(doc, {"version", "models", "routes"}, "model YAML")
     if type(doc.get("version")) is not int or doc["version"] != 1:
         raise ModelConfigError("Model YAML requires version: 1")
@@ -127,6 +132,9 @@ def compile_config(path, tenant, environ=None, previous=None):
         if not isinstance(name, str) or not ENV_NAME.fullmatch(name):
             raise ModelConfigError("Credential fields must name environment variables")
         key = model_name + "-" + field
+        if references_only:
+            sources[key] = name
+            return credential_ref + key
         value = environ.get(name)
         if value is None and previous.get("credential_sources", {}).get(key) == name:
             value = previous.get("credentials", {}).get(key)
@@ -193,7 +201,8 @@ def compile_config(path, tenant, environ=None, previous=None):
               "pools": [{"priority": 0, "targets": [{"deployment": deployment["name"], "weight": 100}]}]}
         records[alias] = {"schema_version": 1, "model": alias, "virtual_model": vm,
                           "providers": [copy.deepcopy(provider)], "deployments": [copy.deepcopy(deployment)]}
-    filename = previous.get("credential_file") if credentials == previous.get("credentials") else None
+    filename = (f"models-{tenant}-secrets.json" if references_only else
+                previous.get("credential_file") if credentials == previous.get("credentials") else None)
     filename = filename or f"models-{tenant}-{uuid4().hex}-secrets.json"
     for record in records.values():
         for provider in record["providers"]:

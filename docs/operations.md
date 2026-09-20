@@ -146,3 +146,15 @@ provider from maintenance. Select the restored object-store data and matching
 storage metadata/signing credentials as one recovery unit. Apply the reviewed
 values, resume workloads, and run the saved-file/browser recovery scenario.
 A future Helm upgrade must retain these chosen recovery references.
+
+
+### Consolidated Kubernetes databases
+
+The quiesced Kubernetes backup helper inventories all non-template databases on
+each selected CNPG server, including databases added after initialization. It also
+saves a private role snapshot. Verification streams row hashes to bound memory.
+For dedicated/tainted nodes, pass the same namespace placement JSON to
+`kube_backup.py` and `kube_restore.py` using `--placement`. Restore drills require
+the original owner roles and deliberately do not replay role/password changes
+into a running server. See [customer deployment configuration](deployment.md)
+for nightly backups, private task-file retention and production limitations.

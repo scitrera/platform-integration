@@ -1,0 +1,67 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+{{- if and (ge (int .Values.phase) 4) .Values.usageReporting.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Release.Name }}-usage-collector
+spec:
+  replicas: 1
+  strategy: {type: Recreate}
+  selector:
+    matchLabels: {app.kubernetes.io/instance: {{ .Release.Name }}, app.kubernetes.io/component: usage-collector}
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/instance: {{ .Release.Name }}
+        app.kubernetes.io/component: usage-collector
+        platform.scitrera.io/trust: service
+    spec:
+      nodeSelector:
+{{ toYaml .Values.nodeSelector | indent 8 }}
+      tolerations:
+{{ toYaml .Values.tolerations | indent 8 }}
+      serviceAccountName: {{ .Release.Name }}-runtime
+      automountServiceAccountToken: false
+      securityContext: {runAsNonRoot: true, runAsUser: 1000, runAsGroup: 1000, seccompProfile: {type: RuntimeDefault}}
+      containers:
+      - name: collector
+        image: {{ .Values.images.backend | quote }}
+        command: [python, -m, scitrera_app_server.billing.collector]
+        securityContext: {allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: {drop: [ALL]}}
+        resources:
+          requests: {cpu: 25m, memory: 64Mi}
+          limits: {cpu: "0.5", memory: 256Mi}
+        env:
+        - {name: BILLING_TENANT, value: {{ .Values.tenant | quote }}}
+        - {name: BILLING_REPORTING_URL, value: {{ required "usageReporting.endpoint required" .Values.usageReporting.endpoint | quote }}}
+        envFrom:
+        - secretRef: {name: {{ required "usageReporting.credentialSecret required" .Values.usageReporting.credentialSecret | quote }}}
+        volumeMounts:
+        - {name: tmp, mountPath: /tmp}
+        readinessProbe:
+          exec: {command: [python, -c, "from pathlib import Path; assert Path('/tmp/usage-collector-ready').exists()"]}
+          periodSeconds: 30
+      volumes:
+      - name: tmp
+        emptyDir: {sizeLimit: 16Mi}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ .Release.Name }}-usage-reporting-egress
+spec:
+  podSelector:
+    matchLabels: {app.kubernetes.io/instance: {{ .Release.Name }}, app.kubernetes.io/component: usage-collector}
+  policyTypes: [Egress]
+  egress:
+  - to:
+    - namespaceSelector:
+        matchLabels: {kubernetes.io/metadata.name: {{ .Values.usageReporting.namespace | quote }}}
+      podSelector:
+        matchLabels: {app.kubernetes.io/component: usage-reporting}
+    ports: [{protocol: TCP, port: 8080}]
+  - to:
+    - podSelector:
+        matchLabels: {cnpg.io/cluster: {{ .Values.usageReporting.databaseCluster | quote }}}
+    ports: [{protocol: TCP, port: 5432}]
+{{- end }}

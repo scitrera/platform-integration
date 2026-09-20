@@ -24,6 +24,10 @@ spec:
         app.kubernetes.io/component: edge
         platform.scitrera.io/trust: service
     spec:
+      nodeSelector:
+{{ toYaml $.Values.nodeSelector | indent 8 }}
+      tolerations:
+{{ toYaml $.Values.tolerations | indent 8 }}
       serviceAccountName: {{ .Release.Name }}-runtime
       automountServiceAccountToken: false
       securityContext:
@@ -64,12 +68,14 @@ spec:
         - postgres
         - -tenant-config
         - /run/storage/tenants.json
+        - -credential-mode
+        - {{ .Values.credentialMode | quote }}
         - -tenant-secrets-file
         - /run/storage/credentials.json
         - -staging
         - s3
         - -staging-bucket
-        - staging
+        - {{ .Values.stagingBucket | quote }}
         - -s3-endpoint
         - $(S3_ENDPOINT)
         - -s3-force-path-style

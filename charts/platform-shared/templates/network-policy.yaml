@@ -239,7 +239,7 @@ spec:
     matchLabels:
       app.kubernetes.io/component: gateway
   policyTypes: [Egress]
-  egress:
+  egress:{{ if not .Values.modelCatalog.apiEgress }} []{{ end }}
 {{- range .Values.modelCatalog.apiEgress }}
   - to:
     - ipBlock:
@@ -265,3 +265,48 @@ spec:
       podSelector:
         matchLabels: {app.kubernetes.io/component: tools}
     ports: [{protocol: TCP, port: 8090}]
+
+{{- if .Values.externalAuthNamespace }}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ .Release.Name }}-shared-auth
+spec:
+  podSelector:
+    matchExpressions:
+    - key: app.kubernetes.io/component
+      operator: In
+      values: [web, auth-gate]
+  policyTypes: [Egress]
+  egress:
+  - to:
+    - namespaceSelector:
+        matchLabels: {kubernetes.io/metadata.name: {{ .Values.externalAuthNamespace | quote }}}
+      podSelector:
+        matchLabels: {app.kubernetes.io/component: auth}
+    ports: [{protocol: TCP, port: 8080}, {protocol: TCP, port: 8081}]
+{{- end }}
+{{- if and .Values.components.auth .Values.authClientNamespaces }}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ .Release.Name }}-tenant-auth-clients
+spec:
+  podSelector:
+    matchLabels: {app.kubernetes.io/instance: {{ .Release.Name }}, app.kubernetes.io/component: auth}
+  policyTypes: [Ingress]
+  ingress:
+  - from:
+{{- range .Values.authClientNamespaces }}
+    - namespaceSelector:
+        matchLabels: {kubernetes.io/metadata.name: {{ . | quote }}}
+      podSelector:
+        matchExpressions:
+        - key: app.kubernetes.io/component
+          operator: In
+          values: [web, auth-gate]
+{{- end }}
+    ports: [{protocol: TCP, port: 8080}, {protocol: TCP, port: 8081}]
+{{- end }}

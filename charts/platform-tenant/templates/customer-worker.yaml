@@ -1,0 +1,102 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+{{- if and (ge (int .Values.phase) 4) .Values.extension.enabled .Values.extension.workerModule }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ .Release.Name }}-customer-state
+  annotations: {helm.sh/resource-policy: keep}
+spec:
+  accessModes: [ReadWriteOnce]
+  storageClassName: {{ .Values.storage.className | quote }}
+  resources:
+    requests: {storage: {{ .Values.extension.stateSize | quote }}}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Release.Name }}-customer-worker
+spec:
+  replicas: 1
+  strategy: {type: Recreate}
+  selector:
+    matchLabels: {app.kubernetes.io/instance: {{ .Release.Name }}, app.kubernetes.io/component: customer-worker}
+  template:
+    metadata:
+      annotations:
+        platform.scitrera.io/customer-revision: {{ .Values.extension.revision | quote }}
+        checksum/customer-config: {{ .Values.extension.config | toJson | sha256sum }}
+        checksum/work-profiles: {{ .Values.workProfiles | toJson | sha256sum }}
+      labels:
+        app.kubernetes.io/instance: {{ .Release.Name }}
+        app.kubernetes.io/component: customer-worker
+        platform.scitrera.io/trust: service
+    spec:
+      nodeSelector:
+{{ toYaml .Values.nodeSelector | indent 8 }}
+      tolerations:
+{{ toYaml .Values.tolerations | indent 8 }}
+      serviceAccountName: {{ .Release.Name }}-runtime
+      automountServiceAccountToken: false
+      terminationGracePeriodSeconds: 60
+      securityContext: {runAsNonRoot: true, runAsUser: 1000, runAsGroup: 1000, fsGroup: 1000, seccompProfile: {type: RuntimeDefault}}
+      containers:
+      - name: worker
+        image: {{ .Values.images.backend | quote }}
+        command: [python, -m, {{ .Values.extension.workerModule | quote }}]
+        securityContext: {allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: {drop: [ALL]}}
+        resources:
+{{ toYaml (index .Values.roleResources "worker" | default .Values.resources) | indent 10 }}
+        env:
+        - {name: PYTHONPATH, value: /opt/customer/src:/opt/platform/backend}
+        - {name: SCITRERA_TENANT, value: {{ .Values.tenant }}}
+        - {name: AETHER_GATEWAY, value: "{{ .Release.Name }}-aether:50051"}
+        - {name: AETHER_TLS_ENABLED, value: "true"}
+        - {name: AETHER_TLS_CA_CERT, value: /run/tls/ca.crt}
+        - {name: AETHER_TLS_CLIENT_CERT, value: /run/tls/tls.crt}
+        - {name: AETHER_TLS_CLIENT_KEY, value: /run/tls/tls.key}
+        - {name: AETHER_MAX_RECONNECT_ATTEMPTS, value: "0"}
+        - {name: SCITRERA_WORK_PROFILES_FILE, value: /run/work-profiles/profiles.json}
+        - {name: LLM_GATEWAY_BASE_URL, value: {{ .Values.gatewayEndpoint | default (printf "http://shared-gateway.%s.svc:8080/v1" .Values.sharedNamespace) | quote }}}
+        - {name: LLM_GATEWAY_BEARER_TOKEN_FILE, value: /run/gateway/token}
+{{- range $name, $value := .Values.extension.environment }}
+        - {name: {{ $name }}, value: {{ $value | quote }}}
+{{- end }}
+        volumeMounts:
+        - {name: code, mountPath: /opt/customer, subPath: {{ .Values.extension.revision | quote }}, readOnly: true}
+        - {name: state, mountPath: {{ .Values.extension.statePath | quote }}}
+        - {name: tls, mountPath: /run/tls, readOnly: true}
+        - {name: gateway, mountPath: /run/gateway, readOnly: true}
+        - {name: profiles, mountPath: /run/work-profiles, readOnly: true}
+        - {name: customer-config, mountPath: /run/customer-config, readOnly: true}
+        - {name: tmp, mountPath: /tmp}
+{{- if .Values.extension.readinessFile }}
+        readinessProbe: &ready
+          exec: {command: [python, -c, {{ printf "from pathlib import Path; assert Path(%s).exists()" (.Values.extension.readinessFile | toJson) | quote }}]}
+          periodSeconds: 5
+          timeoutSeconds: 3
+        startupProbe:
+          <<: *ready
+          failureThreshold: 120
+{{- end }}
+      volumes:
+      - name: code
+        persistentVolumeClaim: {claimName: {{ .Values.extension.claim | quote }}}
+      - name: state
+        persistentVolumeClaim: {claimName: "{{ .Release.Name }}-customer-state"}
+      - name: tls
+        secret: {secretName: {{ .Values.extension.workerTLSSecret | quote }}}
+      - name: gateway
+        secret: {secretName: {{ .Values.secrets.gatewayToken | quote }}}
+      - name: profiles
+        configMap: {name: "{{ .Release.Name }}-work-profiles"}
+      - name: customer-config
+        configMap:
+          name: {{ .Release.Name }}-customer-config
+          items:
+          - {key: review.yaml, path: review.yaml}
+{{- range $name, $value := .Values.extension.config.models }}
+          - {key: "model-{{ $name }}.json", path: "model-catalog/{{ $name }}.json"}
+{{- end }}
+      - name: tmp
+        emptyDir: {sizeLimit: 128Mi}
+{{- end }}

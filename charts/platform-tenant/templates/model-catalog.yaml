@@ -22,6 +22,10 @@ spec:
         app.kubernetes.io/component: model-catalog
         platform.scitrera.io/trust: service
     spec:
+      nodeSelector:
+{{ toYaml $.Values.nodeSelector | indent 8 }}
+      tolerations:
+{{ toYaml $.Values.tolerations | indent 8 }}
       serviceAccountName: {{ $.Release.Name }}-runtime
       automountServiceAccountToken: false
       restartPolicy: Never

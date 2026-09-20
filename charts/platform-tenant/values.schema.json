@@ -357,6 +357,115 @@
       "required": [
         "provider"
       ]
+    },
+    "nodeSelector": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "string"
+      }
+    },
+    "tolerations": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      }
+    },
+    "managedDatabases": {
+      "type": "boolean"
+    },
+    "extension": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "claim": {
+          "type": "string"
+        },
+        "revision": {
+          "type": "string"
+        },
+        "environment": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "workerModule": {
+          "type": "string"
+        },
+        "workerTLSSecret": {
+          "type": "string"
+        },
+        "statePath": {
+          "type": "string"
+        },
+        "stateSize": {
+          "type": "string"
+        },
+        "readinessFile": {
+          "type": "string"
+        },
+        "provisionModule": {
+          "type": "string"
+        },
+        "provisionEnvironment": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "config": {
+          "type": "object",
+          "properties": {
+            "review": {
+              "type": "object"
+            },
+            "models": {
+              "type": "object"
+            }
+          },
+          "additionalProperties": false
+        }
+      }
+    },
+    "roleEnvironment": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": {
+          "type": "string"
+        }
+      }
+    },
+    "taskFilesSize": {
+      "type": "string",
+      "pattern": "^[1-9][0-9]*(Mi|Gi)$"
+    },
+    "gatewayEndpoint": {
+      "type": "string"
+    },
+    "usageReporting": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "endpoint": {
+          "type": "string"
+        },
+        "credentialSecret": {
+          "type": "string"
+        },
+        "namespace": {
+          "type": "string"
+        },
+        "databaseCluster": {
+          "type": "string"
+        }
+      }
     }
   },
   "required": [

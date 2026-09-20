@@ -1,3 +1,4 @@
+{{- if .Values.components.auth }}
 # SPDX-License-Identifier: AGPL-3.0-only
 {{- if ge (int .Values.phase) 2 }}
 apiVersion: apps/v1
@@ -24,6 +25,10 @@ spec:
         app.kubernetes.io/component: auth
         platform.scitrera.io/trust: service
     spec:
+      nodeSelector:
+{{ toYaml $.Values.nodeSelector | indent 8 }}
+      tolerations:
+{{ toYaml $.Values.tolerations | indent 8 }}
       serviceAccountName: {{ .Release.Name }}-runtime
       automountServiceAccountToken: false
       securityContext:
@@ -88,6 +93,12 @@ spec:
           value: {{ .Values.hostname | quote }}
         - name: SCITRERA_AUTH_CHECKZ_ALLOWED_ORIGINS
           value: {{ .Values.publicOrigin | quote }}
+        - name: AUTH_PROXY_SESSION_COOKIE_DOMAIN
+          value: {{ .Values.authSession.cookieDomain | quote }}
+        - name: SCITRERA_AUTH_LOGIN_DEFAULT_TENANT
+          value: {{ .Values.authSession.defaultTenant | quote }}
+        - name: SCITRERA_AUTH_ALLOWED_REDIRECT_ORIGINS
+          value: {{ join "," .Values.authSession.allowedOrigins | quote }}
         - name: AUTH_PROXY_SESSION_COOKIE_SECURE
           value: {{ (not .Values.development) | toString | quote }}
         volumeMounts:
@@ -152,3 +163,5 @@ spec:
   - name: operator
     port: 8082
     targetPort: 8082
+
+{{- end }}

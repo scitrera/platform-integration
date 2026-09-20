@@ -20,12 +20,18 @@ spec:
   template:
     metadata:
       annotations:
+        platform.scitrera.io/customer-revision: {{ .Values.extension.revision | quote }}
+        checksum/customer-config: {{ .Values.extension.config | toJson | sha256sum }}
         checksum/work-profiles: {{ .Values.workProfiles | toJson | sha256sum }}
       labels:
         app.kubernetes.io/instance: {{ .Release.Name }}
         app.kubernetes.io/component: bridge
         platform.scitrera.io/trust: service
     spec:
+      nodeSelector:
+{{ toYaml $.Values.nodeSelector | indent 8 }}
+      tolerations:
+{{ toYaml $.Values.tolerations | indent 8 }}
       serviceAccountName: {{ .Release.Name }}-runtime
       automountServiceAccountToken: false
       securityContext:
@@ -49,10 +55,19 @@ spec:
         resources:
 {{ toYaml (index .Values.roleResources "bridge" | default .Values.resources) | indent 10 }}
         env:
+{{- if .Values.extension.enabled }}
+        - {name: PYTHONPATH, value: /opt/customer/src:/opt/platform/backend}
+{{- range $name, $value := .Values.extension.environment }}
+        - {name: {{ $name }}, value: {{ $value | quote }}}
+{{- end }}
+{{- end }}
+{{- range $name, $value := (index .Values.roleEnvironment "bridge") }}
+        - {name: {{ $name }}, value: {{ $value | quote }}}
+{{- end }}
         - name: LLM_GATEWAY_AUTH_MODE
           value: bearer
         - name: LLM_GATEWAY_BASE_URL
-          value: http://shared-gateway.{{ .Values.sharedNamespace }}.svc:8080/v1
+          value: {{ .Values.gatewayEndpoint | default (printf "http://shared-gateway.%s.svc:8080/v1" .Values.sharedNamespace) | quote }}
         - name: LLM_GATEWAY_BEARER_TOKEN_FILE
           value: /run/gateway/token
         - name: SCITRERA_WORK_PROFILES_FILE
@@ -84,6 +99,10 @@ spec:
         - name: PLATFORM_BRIDGE_SEMANTIC_TOOL_SEARCH
           value: 'false'
         volumeMounts:
+{{- if .Values.extension.enabled }}
+        - {name: customer-code, mountPath: /opt/customer, subPath: {{ .Values.extension.revision | quote }}, readOnly: true}
+        - {name: customer-config, mountPath: /run/customer-config, readOnly: true}
+{{- end }}
         - name: gateway-token
           mountPath: /run/gateway
           readOnly: true
@@ -100,6 +119,18 @@ spec:
         - -m
         - x_platform_bridge
       volumes:
+{{- if .Values.extension.enabled }}
+      - name: customer-config
+        configMap:
+          name: {{ .Release.Name }}-customer-config
+          items:
+          - {key: review.yaml, path: review.yaml}
+{{- range $name, $value := .Values.extension.config.models }}
+          - {key: "model-{{ $name }}.json", path: "model-catalog/{{ $name }}.json"}
+{{- end }}
+      - name: customer-code
+        persistentVolumeClaim: {claimName: {{ required "extension.claim required" .Values.extension.claim }}}
+{{- end }}
       - name: gateway-token
         secret:
           secretName: {{ .Values.secrets.gatewayToken | quote }}

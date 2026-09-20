@@ -1,3 +1,4 @@
+{{- if .Values.components.web }}
 # SPDX-License-Identifier: AGPL-3.0-only
 apiVersion: v1
 kind: ConfigMap
@@ -19,12 +20,12 @@ data:
         root /usr/share/nginx/html;
         location = /healthz { return 200 'ok'; }
         location ^~ /api/auth/ {
-          proxy_pass http://{{ $.Release.Name }}-auth:8081/;
+          proxy_pass {{ $.Values.authEndpoint.external | default (printf "http://%s-auth:8081" $.Release.Name) }}/;
           proxy_set_header Host $http_host;
           proxy_set_header Origin $http_origin;
         }
-        location ^~ /auth/login/ { set $args "next=/api/auth/"; proxy_pass http://{{ $.Release.Name }}-auth:8081; proxy_set_header Host $http_host; }
-        location ^~ /auth/callback/ { proxy_pass http://{{ $.Release.Name }}-auth:8081; proxy_set_header Host $http_host; }
+        location ^~ /auth/login/ { set $args "next=/api/auth/"; proxy_pass {{ $.Values.authEndpoint.external | default (printf "http://%s-auth:8081" $.Release.Name) }}; proxy_set_header Host $http_host; }
+        location ^~ /auth/callback/ { proxy_pass {{ $.Values.authEndpoint.external | default (printf "http://%s-auth:8081" $.Release.Name) }}; proxy_set_header Host $http_host; }
         location ^~ /auth/ { return 404; }
         location = /source.tar.gz { try_files $uri =404; }
         location ^~ /assets/ { try_files $uri =404; }
@@ -52,7 +53,7 @@ data:
           internal;
           # Upload routes enforce their own limit; auth never forwards a body.
           client_max_body_size 0;
-          proxy_pass http://{{ $.Release.Name }}-auth:8080/auth/verify?workspace_id=auth-app&tenant_id={{ .id }};
+          proxy_pass {{ $.Values.authEndpoint.verify | default (printf "http://%s-auth:8080/auth/verify" $.Release.Name) }}?workspace_id=auth-app&tenant_id={{ .id }};
           proxy_pass_request_body off;
           proxy_pass_request_headers off;
           proxy_set_header Content-Length "";
@@ -132,3 +133,5 @@ data:
         location / { try_files $uri $uri/ /index.html; }
       }
     }
+
+{{- end }}

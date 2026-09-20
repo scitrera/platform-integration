@@ -1,5 +1,6 @@
 # SPDX-License-Identifier: AGPL-3.0-only
-{{ if ge (int .Values.phase) 2 }}
+{{- if and (ge (int .Values.phase) 2) .Values.components.web .Values.ingress.enabled }}
+{{- if .Values.ingress.createGateway }}
 apiVersion: gateway.networking.k8s.io/v1
 kind: Gateway
 metadata:
@@ -7,32 +8,73 @@ metadata:
 spec:
   gatewayClassName: {{ .Values.gatewayClass }}
   listeners:
-    - name: https
-      protocol: HTTPS
-      port: 443
-      hostname: {{ .Values.hostname | quote }}
-      tls:
-        mode: Terminate
-        certificateRefs:
-          - name: {{ .Values.tlsSecret }}
-      allowedRoutes:
-        namespaces:
-          from: Same
+  - name: https
+    protocol: HTTPS
+    port: 443
+    hostname: {{ .Values.hostname | quote }}
+    tls:
+      mode: Terminate
+      certificateRefs:
+      - name: {{ .Values.tlsSecret }}
+    allowedRoutes:
+      namespaces:
+        from: Same
 ---
+{{- end }}
 apiVersion: gateway.networking.k8s.io/v1
 kind: HTTPRoute
 metadata:
   name: {{ .Release.Name }}-web
 spec:
   parentRefs:
-    - name: {{ .Release.Name }}-public
+  - name: {{ .Values.ingress.parentName | default (printf "%s-public" .Release.Name) }}
+    {{- if .Values.ingress.parentNamespace }}
+    namespace: {{ .Values.ingress.parentNamespace }}
+    {{- end }}
+    sectionName: {{ .Values.ingress.sectionName }}
   hostnames:
-    - {{ .Values.hostname | quote }}
+  - {{ .Values.hostname | quote }}
   rules:
-    - timeouts:
-        request: 3600s
-        backendRequest: 3600s
+  - matches:
+    - path: {type: PathPrefix, value: /}
+    timeouts: {request: 3600s, backendRequest: 3600s}
+    filters:
+    - type: RequestHeaderModifier
+      requestHeaderModifier:
+        remove:
+        - X-Scitrera-User
+        - X-Scitrera-Name
+        - X-Scitrera-Tenants
+        - X-Scitrera-Default-Tenant
+        - X-Auth-User-ID
+        - X-Auth-Tenant-ID
+        - X-Auth-Principal-Type
+    backendRefs:
+    - name: {{ .Release.Name }}-web
+      port: 8080
+{{- if .Values.ingress.hostAuth.enabled }}
+---
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: SecurityPolicy
+metadata:
+  name: {{ .Release.Name }}-host-auth
+spec:
+  targetRefs:
+  - group: gateway.networking.k8s.io
+    kind: HTTPRoute
+    name: {{ .Release.Name }}-web
+  extAuth:
+    failOpen: false
+    http:
       backendRefs:
-        - name: {{ .Release.Name }}-web
-          port: 8080
-{{ end }}
+      - name: {{ .Release.Name }}-auth-gate
+        port: 8080
+      path: /authorize
+    headersToExtAuth:
+    - Cookie
+    - Authorization
+    - Accept
+    - Sec-Fetch-Dest
+    - Upgrade
+{{- end }}
+{{- end }}

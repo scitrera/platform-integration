@@ -1,3 +1,4 @@
+{{- if .Values.components.web }}
 # SPDX-License-Identifier: AGPL-3.0-only
 {{- if ge (int .Values.phase) 2 }}
 apiVersion: apps/v1
@@ -26,6 +27,10 @@ spec:
         app.kubernetes.io/component: web
         platform.scitrera.io/trust: service
     spec:
+      nodeSelector:
+{{ toYaml $.Values.nodeSelector | indent 8 }}
+      tolerations:
+{{ toYaml $.Values.tolerations | indent 8 }}
       serviceAccountName: {{ .Release.Name }}-runtime
       automountServiceAccountToken: false
       securityContext:
@@ -111,3 +116,5 @@ spec:
   - name: http
     port: 8080
     targetPort: 8080
+
+{{- end }}

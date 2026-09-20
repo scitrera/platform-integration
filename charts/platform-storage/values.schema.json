@@ -155,6 +155,47 @@
           }
         }
       }
+    },
+    "nodeSelector": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "string"
+      }
+    },
+    "tolerations": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      }
+    },
+    "managedDatabases": {
+      "type": "boolean"
+    },
+    "sourceDocumentEndpoints": {
+      "type": "object",
+      "propertyNames": {
+        "pattern": "^[a-z][a-z0-9-]{0,62}$"
+      },
+      "additionalProperties": {
+        "type": "string",
+        "pattern": "^http://[a-zA-Z0-9.-]+:[0-9]+$"
+      }
+    },
+    "stagingBucket": {
+      "type": "string"
+    },
+    "credentialMode": {
+      "type": "string",
+      "enum": [
+        "static",
+        "aws-sts"
+      ]
+    },
+    "serviceAccountAnnotations": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "string"
+      }
     }
   },
   "required": [

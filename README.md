@@ -8,6 +8,7 @@ charts for the Scitrera platform.
 - [Customer repository setup](docs/customer-repositories.md)
 - [Helm prerequisites, configuration and phase commands](docs/helm.md)
 - [State, backup and recovery](docs/operations.md)
+- [Customer deployment configuration](docs/deployment.md)
 - [Actual verification results and remaining gates](docs/verification.md)
 - [Local acceptance commands](docs/acceptance.md)
 - [Native model catalog contract](docs/model-catalog.md)

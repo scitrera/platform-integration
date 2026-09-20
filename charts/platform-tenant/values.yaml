@@ -60,8 +60,6 @@ databaseResources:
   limits:
     cpu: '2'
     memory: 1Gi
-# AetherLite's default Go budget is 1 GiB; mapped files and other memory need
-# container headroom. Operators must size this for their measured replay/data set.
 roleResources:
   aether:
     requests:
@@ -99,25 +97,44 @@ modelCatalog:
 serviceGrants: []
 toolsWorkspace: default
 existingClaims: {}
-
-blobUploadBaseURL: ""
-
-# Optional tenant-owned workers selected per conversation.
+blobUploadBaseURL: ''
 workProfiles:
   profiles: {}
   allowedProfiles: []
-
-# Optional real document services, rendered by scripts/document_services.py.
 documentServices:
   enabled: false
-  profile: ""
+  profile: ''
   environment: {}
   proxy:
     enabled: false
-    image: ""
-    upstream: ""
-    secretName: ""
-
-# Existing installations must copy and verify canonical blobs before switching.
+    image: ''
+    upstream: ''
+    secretName: ''
 documentBlobStorage:
-  provider: default # default (local PVC) or blobgw
+  provider: default
+nodeSelector: {}
+tolerations: []
+managedDatabases: true
+extension:
+  enabled: false
+  claim: ''
+  revision: ''
+  environment: {}
+  workerModule: ''
+  workerTLSSecret: customer-worker-tls
+  statePath: /var/lib/customer
+  stateSize: 10Gi
+  readinessFile: ''
+  provisionModule: ''
+  provisionEnvironment: {}
+  config: {review: {}, models: {}}
+gatewayEndpoint: ''
+roleEnvironment: {}
+taskFilesSize: 4Gi
+
+usageReporting:
+  enabled: false
+  endpoint: ""
+  credentialSecret: ""
+  namespace: ""
+  databaseCluster: ""

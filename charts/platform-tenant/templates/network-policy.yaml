@@ -348,3 +348,22 @@ spec:
       podSelector:
         matchLabels: {app.kubernetes.io/component: web}
     ports: [{protocol: TCP, port: 8090}]
+
+{{- if .Values.documentBlobStorage.provider }}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: '{{ .Release.Name }}-source-page-download'
+spec:
+  podSelector:
+    matchLabels: {app.kubernetes.io/component: memorylayer}
+  policyTypes: [Ingress]
+  ingress:
+  - from:
+    - namespaceSelector:
+        matchLabels: {kubernetes.io/metadata.name: {{ .Values.storageNamespace | quote }}}
+      podSelector:
+        matchLabels: {app.kubernetes.io/component: download}
+    ports: [{protocol: TCP, port: 8000}]
+{{- end }}

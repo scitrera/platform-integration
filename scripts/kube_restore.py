@@ -9,7 +9,7 @@ import re
 from pathlib import Path
 import subprocess
 import tarfile
-from kube_backup import Cluster, identifier, verify
+from kube_backup import Cluster, identifier, verify, placement_file
 
 
 def file_inventory(path):
@@ -34,6 +34,7 @@ def main():
     parser.add_argument("--receipt-directory", type=Path, required=True)
     parser.add_argument("--kubeconfig", type=Path, required=True)
     parser.add_argument("--context", required=True)
+    parser.add_argument("--placement", type=Path, help="JSON namespace mapping to helper Pod nodeSelector/tolerations")
     parser.add_argument("--suffix", required=True, help="New database/PVC suffix; existing destinations are refused")
     args = parser.parse_args()
     if not re.fullmatch(r"[a-z][a-z0-9]{0,15}", args.suffix):
@@ -41,7 +42,7 @@ def main():
     suffix = args.suffix
     backup = args.directory.resolve()
     manifest = verify(backup)  # Verify ALL checksums and archive paths before writes.
-    cluster = Cluster(args.kubeconfig, args.context)
+    cluster = Cluster(args.kubeconfig, args.context, placement_file(args.placement))
     targets = {}
     for filename, record in manifest["files"].items():
         ns = record.get("namespace")
@@ -56,6 +57,13 @@ def main():
                 "psql", "-XAt", "--username=postgres", "--dbname=postgres", "-v", "ON_ERROR_STOP=1", "-c", query], text=True).strip()
             if found != "0":
                 parser.error("Refusing existing destination database: " + ns + "/" + database)
+            owner = identifier(record["owner"])
+            owner_query = "SELECT count(*) FROM pg_roles WHERE rolname='" + owner + "'"
+            owner_found = subprocess.check_output(cluster.command + ["-n", ns, "exec", pod,
+                "-c", "postgres", "--", "psql", "-XAt", "--username=postgres", "--dbname=postgres",
+                "-v", "ON_ERROR_STOP=1", "-c", owner_query], text=True).strip()
+            if owner_found != "1":
+                parser.error("Restore owner is missing; provision reviewed roles first: " + ns + "/" + owner)
             if "table_fingerprints" not in record:
                 parser.error("Database verification inventory missing from backup")
             targets[filename] = {"namespace": ns, "database": database, "pod": pod}
@@ -116,6 +124,7 @@ def main():
                 cluster.remove_copy(ns, pod)
         (receipt / "restored.json").write_text(json.dumps(results, indent=2) + "\n")
     print("Restored and verified all databases and PVCs into unused destinations. Original resources are unchanged.")
+    print("Role snapshots are retained for recovery but never replayed into the live server by this drill.")
     print("Recovery promotion requires operator-selected database URLs, PVC bindings and the backed-up matching Secrets.")
 
 

@@ -1,0 +1,65 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+{{- if and (ge (int .Values.phase) 2) .Values.components.web .Values.ingress.hostAuth.enabled }}
+{{- if and (not .Values.development) (not (regexMatch "@sha256:[a-f0-9]{64}$" .Values.ingress.hostAuth.image)) }}
+{{- fail "production auth gate image must use a registry manifest digest" }}
+{{- end }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Release.Name }}-auth-gate
+spec:
+  replicas: 1
+  selector:
+    matchLabels: {app.kubernetes.io/instance: {{ .Release.Name }}, app.kubernetes.io/component: auth-gate}
+  template:
+    metadata:
+      labels: {app.kubernetes.io/instance: {{ .Release.Name }}, app.kubernetes.io/component: auth-gate, platform.scitrera.io/trust: service}
+    spec:
+      nodeSelector:
+{{ toYaml .Values.nodeSelector | indent 8 }}
+      tolerations:
+{{ toYaml .Values.tolerations | indent 8 }}
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        runAsGroup: 65532
+        seccompProfile: {type: RuntimeDefault}
+      containers:
+      - name: auth-gate
+        image: {{ required "ingress.hostAuth.image is required" .Values.ingress.hostAuth.image | quote }}
+        securityContext: {readOnlyRootFilesystem: true, allowPrivilegeEscalation: false, capabilities: {drop: [ALL]}}
+        resources:
+          requests: {cpu: 25m, memory: 32Mi}
+          limits: {cpu: "1", memory: 128Mi}
+        env:
+        - {name: AUTH_GATE_VERIFY_URL, value: {{ required "host auth requires private verifyURL" .Values.ingress.hostAuth.verifyURL | quote }}}
+        - {name: AUTH_GATE_PUBLIC_ORIGIN, value: {{ .Values.publicOrigin | quote }}}
+        - {name: AUTH_GATE_LOGIN_ORIGIN, value: {{ required "host auth requires loginOrigin" .Values.ingress.hostAuth.loginOrigin | quote }}}
+        - {name: AUTH_GATE_TENANT, value: {{ required "host auth requires tenant" .Values.ingress.hostAuth.tenant | quote }}}
+        - {name: AUTH_GATE_WORKSPACE, value: {{ .Values.ingress.hostAuth.workspace | quote }}}
+        readinessProbe: {httpGet: {path: /healthz, port: 8080}}
+        livenessProbe: {httpGet: {path: /healthz, port: 8080}}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .Release.Name }}-auth-gate
+spec:
+  selector: {app.kubernetes.io/instance: {{ .Release.Name }}, app.kubernetes.io/component: auth-gate}
+  ports: [{name: http, port: 8080, targetPort: 8080}]
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ .Release.Name }}-auth-gate-ingress
+spec:
+  podSelector:
+    matchLabels: {app.kubernetes.io/instance: {{ .Release.Name }}, app.kubernetes.io/component: auth-gate}
+  policyTypes: [Ingress]
+  ingress:
+  - from:
+    - namespaceSelector:
+        matchLabels: {kubernetes.io/metadata.name: {{ .Values.ingress.parentNamespace | default "envoy-gateway-system" | quote }}}
+    ports: [{protocol: TCP, port: 8080}]
+{{- end }}

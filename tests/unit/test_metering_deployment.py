@@ -1,0 +1,60 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+import unittest
+import yaml
+from metering import generate
+from metering_config import openmeter_config
+
+
+class MeteringDeploymentTests(unittest.TestCase):
+    def config(self):
+        return {'schemaVersion': 1, 'production': True,
+                'images': {'backend': 'registry.example/backend@sha256:' + '1'*64},
+                'kubernetes': {'namespace': 'shared', 'storageClass': 'gp3',
+                    'postgresHost': 'openmeter-db-rw', 'postgresSecret': 'openmeter-db',
+                    'credentialsSecret': 'metering-credentials', 'reportingEnvironmentSecret': 'usage-env',
+                    'producerSecret': 'usage-producers', 'journalCluster': 'usage-db',
+                    'nodeSelector': {'pool': 'shared'}}}
+
+    def test_bounded_compose_independent_databases_and_private_endpoints(self):
+        result = generate(self.config(), 'compose')
+        services = result['compose.metering.yaml']['services']
+        for service in services.values():
+            self.assertNotIn('ports', service)
+            self.assertIn('mem_limit', service)
+        self.assertEqual(services['metering-clickhouse']['mem_limit'], '2g')
+        self.assertEqual(services['metering-kafka']['mem_limit'], '1536m')
+        self.assertNotEqual(services['usage-postgres']['volumes'], services['metering-postgres']['volumes'])
+        self.assertIn('metering-migrate', services['metering-api']['depends_on'])
+        self.assertIn('usage_unknown', [m['slug'] for m in openmeter_config()['meters']])
+
+    def test_kubernetes_uses_same_config_and_budgets(self):
+        result = list(yaml.safe_load_all(generate(self.config(), 'kubernetes')['metering.kubernetes.yaml']))
+        config = next(o for o in result if o['kind'] == 'ConfigMap')
+        self.assertEqual(yaml.safe_load(config['data']['openmeter.yaml']), openmeter_config())
+        for obj in result:
+            if obj['kind'] in {'Deployment', 'Job'}:
+                pod = obj['spec']['template']['spec']
+                self.assertEqual(pod['nodeSelector'], {'pool': 'shared'})
+                self.assertFalse(pod['automountServiceAccountToken'])
+                for container in pod['containers']:
+                    self.assertIn('memory', container['resources']['limits'])
+            if obj['kind'] == 'Service':
+                self.assertNotIn('type', obj['spec'])
+        self.assertEqual(len([o for o in result if o['kind'] == 'Job']), 1)
+        self.assertFalse(any(o['kind'] == 'Secret' for o in result))
+        api = next(o for o in result if o['kind'] == 'Deployment' and o['metadata']['name'] == 'metering-api')
+        env = {e['name']: e for e in api['spec']['template']['spec']['containers'][0]['env']}
+        self.assertEqual(env['POSTGRES_HOST']['value'], 'openmeter-db-rw')
+        self.assertEqual(env['POSTGRES_PASSWORD']['valueFrom']['secretKeyRef']['name'], 'openmeter-db')
+        kafka = next(o for o in result if o['kind'] == 'Service' and o['metadata']['name'] == 'metering-kafka')
+        self.assertEqual({p['port'] for p in kafka['spec']['ports']}, {9092, 9093})
+
+    def test_production_refuses_mutable_images_and_embedded_passwords(self):
+        config = self.config()
+        config['images']['backend'] = 'backend:latest'
+        with self.assertRaises(ValueError):
+            generate(config, 'compose')
+        config = self.config()
+        config['kubernetes']['password'] = 'must-not-be-config'
+        with self.assertRaises(ValueError):
+            generate(config, 'kubernetes')

@@ -1,0 +1,28 @@
+development: false
+image: ""
+instances: 1
+storage: {className: "", size: 50Gi}
+resources:
+  requests: {cpu: 200m, memory: 512Mi}
+  limits: {cpu: "2", memory: 1536Mi}
+nodeSelector: {}
+tolerations: []
+serviceAccountAnnotations: {}
+maxConnections: 120
+# Each database has a distinct LOGIN role and pre-created credentials Secret
+# with username/password keys. PostgreSQL instances of shared services remain
+# separate releases; grouping is explicit.
+databases: []
+memorylayerExtensions: false
+backup:
+  enabled: false
+  schedule: "0 15 3 * * *"
+  retentionDays: 30
+  destinationPath: ""
+  endpointURL: ""
+  region: ""
+  credentialsSecret: ""
+  inheritFromIAMRole: false
+  resources:
+    requests: {cpu: 25m, memory: 64Mi}
+    limits: {cpu: "0.5", memory: 512Mi}

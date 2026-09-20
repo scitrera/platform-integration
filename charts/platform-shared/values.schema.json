@@ -230,6 +230,147 @@
           "pattern": "^[a-z0-9]([a-z0-9-]*[a-z0-9])?$"
         }
       }
+    },
+    "components": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "auth": {
+          "type": "boolean"
+        },
+        "gateway": {
+          "type": "boolean"
+        },
+        "web": {
+          "type": "boolean"
+        }
+      }
+    },
+    "managedDatabases": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "auth": {
+          "type": "boolean"
+        },
+        "gateway": {
+          "type": "boolean"
+        }
+      }
+    },
+    "authEndpoint": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "verify": {
+          "type": "string"
+        },
+        "external": {
+          "type": "string"
+        }
+      }
+    },
+    "authSession": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "cookieDomain": {
+          "type": "string"
+        },
+        "defaultTenant": {
+          "type": "string"
+        },
+        "allowedOrigins": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "ingress": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "createGateway": {
+          "type": "boolean"
+        },
+        "parentName": {
+          "type": "string"
+        },
+        "parentNamespace": {
+          "type": "string"
+        },
+        "sectionName": {
+          "type": "string"
+        },
+        "hostAuth": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "enabled": {
+              "type": "boolean"
+            },
+            "image": {
+              "type": "string"
+            },
+            "tenant": {
+              "type": "string"
+            },
+            "workspace": {
+              "type": "string"
+            },
+            "loginOrigin": {
+              "type": "string"
+            },
+            "verifyURL": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    "nodeSelector": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "string"
+      }
+    },
+    "tolerations": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      }
+    },
+    "externalAuthNamespace": {
+      "type": "string"
+    },
+    "authClientNamespaces": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "authIngress": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "parentName": {
+          "type": "string"
+        },
+        "parentNamespace": {
+          "type": "string"
+        },
+        "sectionName": {
+          "type": "string"
+        }
+      }
     }
   },
   "required": [

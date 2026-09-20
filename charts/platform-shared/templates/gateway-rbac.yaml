@@ -1,3 +1,4 @@
+{{- if .Values.components.gateway }}
 apiVersion: v1
 kind: ServiceAccount
 metadata:
@@ -28,4 +29,6 @@ roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: Role
   name: {{ .Release.Name }}-catalog-credentials
+{{- end }}
+
 {{- end }}

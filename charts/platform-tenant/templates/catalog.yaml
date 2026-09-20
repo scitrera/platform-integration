@@ -13,11 +13,18 @@ spec:
   activeDeadlineSeconds: 360
   template:
     metadata:
+      annotations:
+        platform.scitrera.io/customer-revision: {{ .Values.extension.revision | quote }}
+        checksum/customer-config: {{ .Values.extension.config | toJson | sha256sum }}
       labels:
         app.kubernetes.io/instance: {{ .Release.Name }}
         app.kubernetes.io/component: catalog
         platform.scitrera.io/trust: service
     spec:
+      nodeSelector:
+{{ toYaml $.Values.nodeSelector | indent 8 }}
+      tolerations:
+{{ toYaml $.Values.tolerations | indent 8 }}
       serviceAccountName: {{ .Release.Name }}-runtime
       automountServiceAccountToken: false
       securityContext:
@@ -41,6 +48,18 @@ spec:
         resources:
 {{ toYaml (index .Values.roleResources "catalog" | default .Values.resources) | indent 10 }}
         env:
+{{- if .Values.extension.enabled }}
+        - {name: PYTHONPATH, value: /opt/customer/src:/opt/platform/backend}
+{{- range $name, $value := .Values.extension.environment }}
+        - {name: {{ $name }}, value: {{ $value | quote }}}
+{{- end }}
+{{- end }}
+{{- range $name, $value := (index .Values.roleEnvironment "catalog") }}
+        - {name: {{ $name }}, value: {{ $value | quote }}}
+{{- end }}
+{{- range $name, $value := .Values.extension.provisionEnvironment }}
+        - {name: {{ $name }}, value: {{ $value | quote }}}
+{{- end }}
         - name: STATEFUL_ROOT
           value: /tmp/state
         - name: XDG_CONFIG_HOME
@@ -84,6 +103,10 @@ spec:
         - name: SEED_DEV_ADMIN
           value: {{ .Values.seedDevelopmentAdmin | toString | quote }}
         volumeMounts:
+{{- if .Values.extension.enabled }}
+        - {name: customer-code, mountPath: /opt/customer, subPath: {{ .Values.extension.revision | quote }}, readOnly: true}
+        - {name: customer-config, mountPath: /run/customer-config, readOnly: true}
+{{- end }}
         - name: tmp
           mountPath: /tmp
         - name: bootstrap
@@ -97,8 +120,28 @@ spec:
           readOnly: true
         command:
         - python
+{{- if and .Values.extension.enabled .Values.extension.provisionModule }}
+        - -c
+        - |
+          import runpy
+          runpy.run_path("/integration/tenant_setup.py", run_name="__main__")
+          runpy.run_module({{ .Values.extension.provisionModule | toJson }}, run_name="__main__")
+{{- else }}
         - /integration/tenant_setup.py
+{{- end }}
       volumes:
+{{- if .Values.extension.enabled }}
+      - name: customer-config
+        configMap:
+          name: {{ .Release.Name }}-customer-config
+          items:
+          - {key: review.yaml, path: review.yaml}
+{{- range $name, $value := .Values.extension.config.models }}
+          - {key: "model-{{ $name }}.json", path: "model-catalog/{{ $name }}.json"}
+{{- end }}
+      - name: customer-code
+        persistentVolumeClaim: {claimName: {{ required "extension.claim required" .Values.extension.claim }}}
+{{- end }}
       - name: tmp
         emptyDir: {}
       - name: bootstrap

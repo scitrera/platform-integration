@@ -26,6 +26,10 @@ spec:
         app.kubernetes.io/component: provider
         platform.scitrera.io/trust: service
     spec:
+      nodeSelector:
+{{ toYaml $.Values.nodeSelector | indent 8 }}
+      tolerations:
+{{ toYaml $.Values.tolerations | indent 8 }}
       serviceAccountName: {{ .Release.Name }}-provider
       automountServiceAccountToken: true
       securityContext:
@@ -49,6 +53,14 @@ spec:
         resources:
 {{ toYaml (index .Values.roleResources "provider" | default .Values.resources) | indent 10 }}
         env:
+        - {name: SANDBOX_K8S_NODE_SELECTOR, value: {{ .Values.nodeSelector | toJson | quote }}}
+        - {name: SANDBOX_K8S_TOLERATIONS, value: {{ .Values.tolerations | toJson | quote }}}
+        - {name: SANDBOX_K8S_TASK_FILES_STORAGE_CLASS, value: {{ .Values.storage.className | quote }}}
+        - {name: SANDBOX_K8S_TASK_FILES_SIZE, value: {{ .Values.taskFilesSize | quote }}}
+        - {name: SANDBOX_BLOB_FETCH_BASE_URL, value: {{ .Values.blobFetchBaseURL | quote }}}
+{{- range $name, $value := (index .Values.roleEnvironment "provider") }}
+        - {name: {{ $name }}, value: {{ $value | quote }}}
+{{- end }}
         - name: SCITRERA_WORK_PROFILES_FILE
           value: /run/work-profiles/profiles.json
         - name: AETHER_GATEWAY

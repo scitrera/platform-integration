@@ -1,3 +1,4 @@
+{{- if and .Values.components.auth .Values.managedDatabases.auth }}
 # SPDX-License-Identifier: AGPL-3.0-only
 apiVersion: postgresql.cnpg.io/v1
 kind: Cluster
@@ -10,6 +11,11 @@ metadata:
   annotations:
     helm.sh/resource-policy: keep
 spec:
+  affinity:
+    nodeSelector:
+{{ toYaml .Values.nodeSelector | indent 6 }}
+    tolerations:
+{{ toYaml .Values.tolerations | indent 6 }}
   instances: {{ .Values.databaseInstances }}
   imageName: {{ required "images.postgres is required" .Values.images.postgres | quote }}
   enableSuperuserAccess: false
@@ -30,7 +36,9 @@ spec:
   postgresql:
     parameters:
       max_connections: '100'
+{{- end }}
 ---
+{{- if and .Values.components.gateway .Values.managedDatabases.gateway }}
 apiVersion: postgresql.cnpg.io/v1
 kind: Cluster
 metadata:
@@ -42,6 +50,11 @@ metadata:
   annotations:
     helm.sh/resource-policy: keep
 spec:
+  affinity:
+    nodeSelector:
+{{ toYaml .Values.nodeSelector | indent 6 }}
+    tolerations:
+{{ toYaml .Values.tolerations | indent 6 }}
   instances: {{ .Values.databaseInstances }}
   imageName: {{ required "images.postgres is required" .Values.images.postgres | quote }}
   enableSuperuserAccess: false
@@ -62,3 +75,5 @@ spec:
   postgresql:
     parameters:
       max_connections: '100'
+
+{{- end }}

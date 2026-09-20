@@ -24,6 +24,10 @@ spec:
         app.kubernetes.io/component: memorylayer
         platform.scitrera.io/trust: service
     spec:
+      nodeSelector:
+{{ toYaml $.Values.nodeSelector | indent 8 }}
+      tolerations:
+{{ toYaml $.Values.tolerations | indent 8 }}
       serviceAccountName: {{ .Release.Name }}-runtime
       automountServiceAccountToken: false
       securityContext:
@@ -47,6 +51,10 @@ spec:
         resources:
 {{ toYaml (index .Values.roleResources "memorylayer" | default .Values.resources) | indent 10 }}
         env:
+        - {name: MEMORYLAYER_SOURCE_FILES_FETCH_URL, value: {{ .Values.blobFetchBaseURL | quote }}}
+{{- range $name, $value := (index .Values.roleEnvironment "memorylayer") }}
+        - {name: {{ $name }}, value: {{ $value | quote }}}
+{{- end }}
         - name: MEMORYLAYER_DATA_DIR
           value: /data
         - name: MEMORYLAYER_BLOB_STORAGE_BASE_PATH

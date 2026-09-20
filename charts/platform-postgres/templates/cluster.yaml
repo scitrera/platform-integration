@@ -1,0 +1,126 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+{{- if not .Values.databases }}{{ fail "at least one database is required" }}{{ end }}
+{{- if and (not .Values.development) (not (regexMatch "@sha256:[a-f0-9]{64}$" .Values.image)) }}
+{{- fail "production PostgreSQL image must use a registry manifest digest" }}{{ end }}
+{{- $first := first .Values.databases }}
+{{- if and .Values.memorylayerExtensions (ne $first.name "memorylayer") }}{{ fail "memorylayer must be the first database when memorylayerExtensions is enabled" }}{{ end }}
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: {{ .Release.Name }}-db
+  annotations: {helm.sh/resource-policy: keep}
+  labels: {app.kubernetes.io/instance: {{ .Release.Name }}, platform.scitrera.io/trust: service}
+spec:
+  instances: {{ .Values.instances }}
+  imageName: {{ required "image is required" .Values.image | quote }}
+  enableSuperuserAccess: false
+  storage:
+    size: {{ .Values.storage.size }}
+    storageClass: {{ .Values.storage.className | quote }}
+  resources:
+{{ toYaml .Values.resources | indent 4 }}
+  affinity:
+    nodeSelector:
+{{ toYaml .Values.nodeSelector | indent 6 }}
+    tolerations:
+{{ toYaml .Values.tolerations | indent 6 }}
+  serviceAccountTemplate:
+    metadata:
+      annotations:
+{{ toYaml .Values.serviceAccountAnnotations | indent 8 }}
+  bootstrap:
+    initdb:
+      database: {{ $first.name }}
+      owner: {{ $first.name }}
+      secret: {name: {{ $first.secret }}}
+{{- if .Values.memorylayerExtensions }}
+      postInitApplicationSQL:
+      - CREATE EXTENSION IF NOT EXISTS vector;
+      - CREATE EXTENSION IF NOT EXISTS age;
+      - CREATE EXTENSION IF NOT EXISTS pg_textsearch;
+      - ALTER ROLE {{ $first.name }} SET search_path = public, ag_catalog;
+{{- end }}
+  managed:
+    roles:
+{{- range .Values.databases }}
+    - name: {{ .name }}
+      ensure: present
+      login: true
+      superuser: false
+      createdb: false
+      createrole: false
+      passwordSecret: {name: {{ .secret }}}
+{{- end }}
+  postgresql:
+{{- if .Values.memorylayerExtensions }}
+    shared_preload_libraries: [pg_textsearch]
+{{- end }}
+    parameters:
+      max_connections: {{ .Values.maxConnections | quote }}
+      shared_buffers: 256MB
+      work_mem: 4MB
+      maintenance_work_mem: 64MB
+      max_parallel_workers_per_gather: "1"
+{{- if .Values.backup.enabled }}
+  plugins:
+  - name: barman-cloud.cloudnative-pg.io
+    isWALArchiver: true
+    parameters: {barmanObjectName: {{ .Release.Name }}-backups}
+{{- end }}
+{{- range rest .Values.databases }}
+---
+apiVersion: postgresql.cnpg.io/v1
+kind: Database
+metadata:
+  name: {{ $.Release.Name }}-{{ .name | replace "_" "-" }}
+  annotations: {helm.sh/resource-policy: keep}
+spec:
+  name: {{ .name }}
+  owner: {{ .name }}
+  cluster: {name: {{ $.Release.Name }}-db}
+  databaseReclaimPolicy: retain
+{{- end }}
+{{- if .Values.backup.enabled }}
+---
+apiVersion: barmancloud.cnpg.io/v1
+kind: ObjectStore
+metadata:
+  name: {{ .Release.Name }}-backups
+  annotations: {helm.sh/resource-policy: keep}
+spec:
+  instanceSidecarConfiguration:
+    resources:
+{{ toYaml .Values.backup.resources | indent 6 }}
+{{- if .Values.backup.region }}
+    env:
+    - {name: AWS_REGION, value: {{ .Values.backup.region | quote }}}
+    - {name: AWS_DEFAULT_REGION, value: {{ .Values.backup.region | quote }}}
+{{- end }}
+  retentionPolicy: {{ printf "%dd" (int .Values.backup.retentionDays) | quote }}
+  configuration:
+    destinationPath: {{ required "backup.destinationPath is required" .Values.backup.destinationPath | quote }}
+{{- if .Values.backup.endpointURL }}
+    endpointURL: {{ .Values.backup.endpointURL | quote }}
+{{- end }}
+    s3Credentials:
+{{- if .Values.backup.inheritFromIAMRole }}
+      inheritFromIAMRole: true
+{{- else }}
+      accessKeyId: {name: {{ required "backup credentials Secret required" .Values.backup.credentialsSecret }}, key: AWS_ACCESS_KEY_ID}
+      secretAccessKey: {name: {{ .Values.backup.credentialsSecret }}, key: AWS_SECRET_ACCESS_KEY}
+{{- end }}
+    wal: {compression: gzip, maxParallel: 1}
+    data: {compression: gzip, jobs: 1}
+---
+apiVersion: postgresql.cnpg.io/v1
+kind: ScheduledBackup
+metadata:
+  name: {{ .Release.Name }}-nightly
+spec:
+  schedule: {{ .Values.backup.schedule | quote }}
+  immediate: true
+  backupOwnerReference: self
+  cluster: {name: {{ .Release.Name }}-db}
+  method: plugin
+  pluginConfiguration: {name: barman-cloud.cloudnative-pg.io}
+{{- end }}

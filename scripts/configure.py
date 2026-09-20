@@ -30,7 +30,9 @@ def openssl(*args):
                    stderr=subprocess.PIPE)
 
 
-def certificate(directory, cn, ca=None, hosts=()):
+def certificate(directory, cn, ca=None, hosts=(), *, days=30):
+    if type(days) is not int or not 1 <= days <= 3650:
+        raise ValueError("Certificate validity must be between 1 and 3650 days")
     directory.mkdir(parents=True, exist_ok=True)
     key, crt = directory / 'tls.key', directory / 'tls.crt'
     if key.exists() or crt.exists():
@@ -40,7 +42,7 @@ def certificate(directory, cn, ca=None, hosts=()):
     openssl('genpkey', '-algorithm', 'RSA', '-pkeyopt', 'rsa_keygen_bits:2048', '-out', key)
     key.chmod(0o600)
     if ca is None:
-        openssl('req', '-new', '-x509', '-key', key, '-out', crt, '-days', '30',
+        openssl('req', '-new', '-x509', '-key', key, '-out', crt, '-days', str(days),
                 '-subj', '/CN='+cn, '-addext', 'basicConstraints=critical,CA:TRUE',
                 '-addext', 'keyUsage=critical,keyCertSign,cRLSign')
         return
@@ -50,7 +52,7 @@ def certificate(directory, cn, ca=None, hosts=()):
                    ('subjectAltName='+','.join('DNS:'+h for h in hosts)+'\n' if hosts else ''))
     openssl('req', '-new', '-key', key, '-out', csr, '-subj', '/CN='+cn)
     openssl('x509', '-req', '-in', csr, '-CA', ca/'tls.crt', '-CAkey', ca/'tls.key',
-            '-set_serial', str(secrets.randbits(128)), '-days', '30', '-extfile', ext, '-out', crt)
+            '-set_serial', str(secrets.randbits(128)), '-days', str(days), '-extfile', ext, '-out', crt)
     create(directory/'ca.crt', (ca/'tls.crt').read_text(), 0o644)
     csr.unlink()
     ext.unlink()

@@ -58,3 +58,40 @@ modelCatalog:
   credentialSecretNames: []
   apiEgress: []
 existingClaims: {}
+components:
+  auth: true
+  gateway: true
+  web: true
+managedDatabases:
+  auth: true
+  gateway: true
+nodeSelector: {}
+tolerations: []
+authEndpoint:
+  verify: ''
+  external: ''
+authSession:
+  cookieDomain: ''
+  defaultTenant: ''
+  allowedOrigins: []
+ingress:
+  enabled: true
+  createGateway: true
+  parentName: ''
+  parentNamespace: ''
+  sectionName: https
+  hostAuth:
+    enabled: false
+    image: ''
+    tenant: ''
+    workspace: auth-app
+    loginOrigin: ''
+    verifyURL: ''
+externalAuthNamespace: ''
+authClientNamespaces: []
+
+authIngress:
+  enabled: false
+  parentName: ''
+  parentNamespace: ''
+  sectionName: https

@@ -31,8 +31,15 @@ databaseResources:
     cpu: '2'
     memory: 1Gi
 roleResources: {}
-
 uploadProxy:
   enabled: false
-  endpoint: ""
-  signedHost: ""
+  endpoint: ''
+  signedHost: ''
+nodeSelector: {}
+tolerations: []
+managedDatabases: true
+sourceDocumentEndpoints: {}
+stagingBucket: staging
+
+credentialMode: static
+serviceAccountAnnotations: {}
