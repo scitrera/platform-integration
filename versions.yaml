@@ -109,13 +109,13 @@ images:
     availability: verified in local Docker engine; registry publication not established
     source_set: platform-backend-60dece1d39c0b694
   MEMORYLAYER_IMAGE:
-    tag: platform-integration/memorylayer:ec02946ce70ee60a
-    local_image_id: sha256:19707a5b3000ead911d012440ff532ec3b121ed61a2b1efc0ad13bf8afda473d
+    tag: platform-integration/memorylayer:84d4fd835dafe9fa
+    local_image_id: sha256:055796353e46c54c521ce7f5be966258af91e279fe7ccbf1be6a282e82203abf
     os: linux
     architecture: arm64
     registry_manifest_digests: []
     availability: Verified in local Docker engine; registry publication not established
-    source_set: memorylayer-enterprise-ec02946ce70ee60a
+    source_set: memorylayer-enterprise-84d4fd835dafe9fa
   CONNECTORS_IMAGE:
     tag: platform-integration/connectors:9b4843491c4b4e4f
     local_image_id: sha256:f9a2f04c864ab4f916838f54f8b16ea13bbdfe3261b766d143be8d195284ccf7
@@ -470,6 +470,16 @@ source_sets:
     reviewed_file_count: 1807
     include_untracked: []
     availability: Local main commit; repository publication pending
+  memorylayer-enterprise-84d4fd835dafe9fa:
+    component: memorylayer-enterprise
+    repository: https://github.com/scitrera/memorylayer-enterprise.git
+    revision: 513bf431a6ea276bcf2c78edc899edb07b6e2379
+    tracked_content_sha256: 84d4fd835dafe9fa0aa3f3817c72115cd594067bab49a4252015793486e5db3f
+    dirty: false
+    reviewed_file_count: 601
+    include_untracked: []
+    availability: Published upstream main; bounded client and preparation-status regressions
+      passed
 upstream_changes:
   sahara-oss:
     pull_request: https://github.com/scitrera/agent-harness-go/pull/1
