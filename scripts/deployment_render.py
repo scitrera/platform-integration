@@ -175,6 +175,7 @@ def helm(resolved):
                                  "workspace": config["auth"]["workspace"], "loginOrigin": config["auth"]["origin"],
                                  "verifyURL": verify, "image": bindings.get("images", {}).get("authGate", "")}},
         "modelCatalog": {"allowedProviderHosts": hosts, "allowHTTP": False, "apiEgress": k.get("apiEgress", []),
+                         "allowedCredentialSchemes": ["file"],
                          "addressTemplate": f"{{tenant}}-aether.{ns}.svc.cluster.local:50051",
                          "serverNameTemplate": "{tenant}-aether",
                          "credentialSecretNames": ["aether-sparkroute-creds-" + tenant]},

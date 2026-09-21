@@ -173,6 +173,20 @@ class DeploymentRenderTests(unittest.TestCase):
                 str(ROOT / "charts" / ("platform-" + chart)), "-n", "tenant-example",
                 "-f", str(path), "--kube-version", "1.34.0"], text=True, stderr=subprocess.PIPE)
             objects.extend(obj for obj in yaml.safe_load_all(output) if obj)
+        gateway = next(obj for obj in objects if obj["kind"] == "Deployment"
+                       and obj["metadata"]["name"] == "example-serving-gateway")
+        gateway_env = {entry["name"]: entry.get("value")
+                       for entry in gateway["spec"]["template"]["spec"]["containers"][0]["env"]}
+        allowed = gateway_env["SPARKROUTE_MODEL_CATALOG_ALLOWED_CREDENTIAL_SCHEMES"].split(",")
+        self.assertEqual(allowed, ["file"])
+        self.assertEqual(gateway_env["SPARKROUTE_CREDENTIAL_FILE_ROOTS"], "/run/gateway")
+        # Publishing accepts schema-valid records, but inference also enforces
+        # the gateway credential policy. Check the actual compiler references.
+        import re
+        records = json.dumps(outputs["helm/tenant.yaml"]["modelCatalog"]["records"])
+        schemes = set(re.findall(r'"([a-z]+)://[^" ]*', records)) - {"https"}
+        self.assertTrue(schemes)
+        self.assertTrue(schemes.issubset(allowed), schemes)
         bootstrap = next(obj for obj in objects if obj["kind"] == "ConfigMap" and "memorylayer_migrate.py" in obj.get("data", {}))
         for script in ("memorylayer_migrate.py", "tenant_setup.py"):
             self.assertEqual(bootstrap["data"][script], (ROOT / "scripts" / script).read_text())
@@ -220,6 +234,7 @@ class DeploymentRenderTests(unittest.TestCase):
         self.assertEqual(serving["dnsResolver"], "10.100.0.10")
         self.assertEqual(serving["modelCatalog"]["addressTemplate"].count("{tenant}"), 1)
         self.assertEqual(serving["modelCatalog"]["serverNameTemplate"], "{tenant}-aether")
+        self.assertEqual(serving["modelCatalog"]["allowedCredentialSchemes"], ["file"])
         self.assertEqual(serving["modelCatalog"]["apiEgress"], [{"cidr": "10.100.0.1/32", "port": 443}])
         self.assertFalse(serving["ingress"]["enabled"])
         self.assertTrue(serving["ingress"]["hostAuth"]["enabled"])

@@ -54,6 +54,7 @@ modelCatalog:
   addressTemplate: aether-gateway.tenant-{tenant}.svc.cluster.local:50051
   serverNameTemplate: '{tenant}-aether'
   allowedProviderHosts: []
+  allowedCredentialSchemes: [k8s, workload]
   allowHTTP: false
   credentialSecretNames: []
   apiEgress: []

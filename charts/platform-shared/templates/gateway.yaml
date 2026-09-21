@@ -86,6 +86,8 @@ spec:
               fieldPath: metadata.uid
         - name: SPARKROUTE_MODEL_CATALOG_ALLOWED_PROVIDER_HOSTS
           value: {{ required "modelCatalog.allowedProviderHosts is required" (join "," .Values.modelCatalog.allowedProviderHosts) | quote }}
+        - name: SPARKROUTE_MODEL_CATALOG_ALLOWED_CREDENTIAL_SCHEMES
+          value: {{ required "modelCatalog.allowedCredentialSchemes is required" (join "," .Values.modelCatalog.allowedCredentialSchemes) | quote }}
         - name: SPARKROUTE_MODEL_CATALOG_PROVIDER_ALLOW_HTTP
           value: {{ .Values.modelCatalog.allowHTTP | quote }}
 {{- end }}
