@@ -172,13 +172,13 @@ images:
     verified_date: '2026-09-15'
     source_set: auth-go-dd4d9dc5b6ee2252
   WEB_IMAGE:
-    tag: platform-integration/web:32c6f8c3f09671ea
-    local_image_id: sha256:481c94a91fc48c0e02ab5fb66b55e36a251c8b187815eb4aa164be2feebf76ab
+    tag: platform-integration/web:83d056db200a27d5
+    local_image_id: sha256:5e394aa90dfbad301b1a02d22c25499e27402424b7373dbcf2ffda3f6662e7c1
     os: linux
     architecture: arm64
     registry_manifest_digests: []
     availability: Verified in local Docker engine; registry publication not established
-    source_set: platform-frontend-32c6f8c3f09671ea
+    source_set: platform-frontend-83d056db200a27d5
     matching_source_archive:
       url_path: /source.tar.gz
       sha256: 89c0311dc2f023d30c4f758e011e3df218de66a6b31bb43e22354ddb3d4d41b3
@@ -443,13 +443,13 @@ source_sets:
     reviewed_file_count: 600
     include_untracked: []
     availability: Published upstream main, Python and npm CI passed
-  platform-frontend-32c6f8c3f09671ea:
+  platform-frontend-83d056db200a27d5:
     component: platform-frontend
     repository: https://github.com/scitrera/platform-frontend.git
-    revision: 83cabca2bd9eb92abf03c67d23b4c3f341204193
-    tracked_content_sha256: 32c6f8c3f09671eaf76e41995aff5ab47d66219255e91fbb2e16d3ceab9e621a
+    revision: 49f5c985769ad293981ce04c906988b1ed81f2f1
+    tracked_content_sha256: 83d056db200a27d5e6dadd1299303ff3d7df1ab926ca27ae04015691c67f9f6a
     dirty: false
-    reviewed_file_count: 434
+    reviewed_file_count: 436
     include_untracked: []
     availability: Local main commit; repository publication pending
 upstream_changes:
