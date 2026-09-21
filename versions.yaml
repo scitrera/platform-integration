@@ -173,13 +173,13 @@ images:
     availability: Verified local image; private deployment publication recorded separately
     source_set: platform-frontend-0cf28c072fe5ef15
   AETHER_IMAGE:
-    tag: platform-integration/aether:7935c06d344578d2
-    local_image_id: sha256:307c94a825f0642a6d1e197654e3d5c0c21143caf3bec85d92db2efbfa333de0
+    tag: platform-integration/aether:f67b7e8fc69a1c62
+    local_image_id: sha256:7b133bfe4d8dcb538d3996fe957b9b50a771248e183680470e3a781690973526
     os: linux
     architecture: arm64
     registry_manifest_digests: []
-    availability: verified in local Docker engine; registry publication not established
-    source_set: aether-7935c06d344578d2
+    availability: Verified local image; private deployment publication recorded separately
+    source_set: aether-f67b7e8fc69a1c62
   SPARKROUTE_IMAGE:
     tag: platform-integration/platform-sparkroute:273bb1e6c4b92dd5
     local_image_id: sha256:6e97b4a30852e944b18576db74c4ede5a9adf38e171b54df1bc0e955c125e85c
@@ -516,6 +516,14 @@ source_sets:
     dirty: false
     include_untracked: []
     availability: Verified source revision; publication depends on component repository
+  aether-f67b7e8fc69a1c62:
+    component: aether
+    repository: https://github.com/scitrera/aether
+    revision: 46bf4c51a21902d6744c76cb41abbf7272694b0c
+    tracked_content_sha256: f67b7e8fc69a1c6219ce0953001844aab9b902b3fd3671f9ea5d0f1e03ccc695
+    dirty: false
+    include_untracked: []
+    availability: Tested local main; public review-branch publication awaits approval
 upstream_changes:
   sahara-oss:
     pull_request: https://github.com/scitrera/agent-harness-go/pull/1
