@@ -96,3 +96,26 @@ python3 tests/integration/auth_config.py \
 
 Images must already be available locally. The test removes only its own containers
 and network. This verifies operator configuration, not live OAuth login.
+
+## Explicit member claim overrides
+
+Auth-go can attach selected claim overrides to an existing user–tenant
+membership. An operator must create the user and membership first; this helper
+never creates either, enables accounts, or changes tenant enrollment policy.
+The provider must still be allowed by the tenant, and all unmodified tenant
+claims remain required. Removing the membership removes the overrides; a later
+auto-add starts with ordinary tenant checks.
+
+Save an operator-managed file such as:
+
+```json
+{"version":1,"tenant":"example","email":"support@partner.example",
+ "checks":{"azure":{"tid":["22222222-2222-4222-8222-222222222222"]}}}
+```
+
+Then run `scripts/auth_membership.py check`, `plan`, or `apply` with `--file`.
+The origin, operator token file and optional loopback tunnel arguments are the
+same as `auth_config.py`. Reapplying identical checks is a no-op; stale revisions
+fail without retrying the edit. `checks: {}` removes all overrides and restores
+inherited tenant checks. Provider maps are replaced in full. This requires the
+auth-go membership override API and schema migration 002; older servers reject it.

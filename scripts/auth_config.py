@@ -41,6 +41,25 @@ def domain(value):
     return value
 
 
+def validate_provider_checks(checks_by_provider):
+    checks_by_provider = deepcopy(checks_by_provider)
+    if not isinstance(checks_by_provider, dict):
+        raise ValueError("checks must be a provider map")
+    for provider, checks in checks_by_provider.items():
+        if not PROVIDER.fullmatch(provider) or (checks is not None and not isinstance(checks, dict)):
+            raise ValueError("Invalid provider check map")
+        for claim, value in (checks or {}).items():
+            if not CLAIM.fullmatch(claim):
+                raise ValueError("Invalid claim name")
+            values = value if isinstance(value, list) else [value]
+            if any(not isinstance(v, str) or (not v and (provider, claim) != ("google", "hd")) for v in values):
+                raise ValueError("Claim checks must contain strings; only Google hd permits a blank option")
+            if (provider, claim) == ("google", "hd"):
+                normalized = [domain(v) if v.strip() else "" for v in values]
+                checks[claim] = normalized if isinstance(value, list) else normalized[0]
+    return checks_by_provider
+
+
 def validate_config(config):
     config = deepcopy(config)
     fields(config, ("version", "tenant", "domains", "auth"))
@@ -81,20 +100,7 @@ def validate_config(config):
     policy["providers"] = sorted(providers)
     if policy["auto_add"] and not domains:
         raise ValueError("Auto-add requires at least one associated email domain")
-    if not isinstance(policy["checks"], dict):
-        raise ValueError("checks must be a provider map")
-    for provider, checks in policy["checks"].items():
-        if not PROVIDER.fullmatch(provider) or (checks is not None and not isinstance(checks, dict)):
-            raise ValueError("Invalid provider check map")
-        for claim, value in (checks or {}).items():
-            if not CLAIM.fullmatch(claim):
-                raise ValueError("Invalid claim name")
-            values = value if isinstance(value, list) else [value]
-            if any(not isinstance(v, str) or (not v and (provider, claim) != ("google", "hd")) for v in values):
-                raise ValueError("Claim checks must contain strings; only Google hd permits a blank option")
-            if (provider, claim) == ("google", "hd"):
-                normalized = [domain(v) if v.strip() else "" for v in values]
-                checks[claim] = normalized if isinstance(value, list) else normalized[0]
+    policy["checks"] = validate_provider_checks(policy["checks"])
     return config
 
 
