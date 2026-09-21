@@ -23,6 +23,8 @@ class DocumentServicesTests(unittest.TestCase):
         self.assertEqual(helm['embeddingDimensions'], 1920)
         self.assertEqual(helm['documentServices']['environment']['MEMORYLAYER_EMBED_SERVER_URL'], 'http://127.0.0.1:8081')
         self.assertFalse(manifest['applied'])
+        for env in (compose['services']['memorylayer-alpha']['environment'], helm['documentServices']['environment']):
+            self.assertEqual(env['MEMORYLAYER_EMBEDDING_PRELOAD_ENABLED'], 'false')
         self.assertNotIn('ports', compose['services']['embed-proxy-alpha'])
         self.assertEqual(compose['services']['memorylayer-alpha']['environment']['MEMORYLAYER_TRANSCRIPTION_SERVICE'], 'embed_server')
 
@@ -128,6 +130,7 @@ class SplitDocumentServicesTests(unittest.TestCase):
             self.assertEqual({s['deadline'] for s in routing['services'].values()}, {value})
             self.assertEqual(helm['documentServices']['proxy']['routing'], routing)
             for env in (compose['services']['memorylayer-alpha']['environment'], helm['documentServices']['environment']):
+                self.assertEqual(env['MEMORYLAYER_EMBEDDING_PRELOAD_ENABLED'], 'false')
                 self.assertEqual(env['MEMORYLAYER_EMBED_SERVER_TIMEOUT'], str(value + 60))
                 self.assertEqual(env['MEMORYLAYER_GLINER2_NER_TIMEOUT'], str(value + 60))
         for value in (0, 59, 1801, True, '900'):

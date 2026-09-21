@@ -72,6 +72,8 @@ def render(config, tenant, storage_dimensions, *, allow_local_image=False):
     endpoint = f'http://{proxy_name}:8080' if modal else config['endpoint']
     env = {
         'MEMORYLAYER_EMBEDDING_PROVIDER': 'embed_server', 'MEMORYLAYER_EMBED_TRANSPORT': 'http',
+        # Hosted model cold starts must not block database/API initialization.
+        'MEMORYLAYER_EMBEDDING_PRELOAD_ENABLED': 'false',
         'MEMORYLAYER_EMBEDDING_MODEL': MODELS['single']['model'],
         'MEMORYLAYER_EMBEDDING_DIMENSIONS': '1920', 'MEMORYLAYER_EMBED_SERVER_URL': endpoint,
         'MEMORYLAYER_EMBED_SERVER_TIMEOUT': '1860', 'MEMORYLAYER_EMBED_IMAGE_BATCH_SIZE': '1',
