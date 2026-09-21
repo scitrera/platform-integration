@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: AGPL-3.0-only
-{{- if ge (int .Values.phase) 4 }}
+{{- if and (ge (int .Values.phase) 4) .Values.toolsWssEnabled }}
 apiVersion: apps/v1
 kind: Deployment
 metadata:

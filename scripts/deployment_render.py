@@ -161,7 +161,7 @@ def helm(resolved):
         "publicOrigin": origin, "adminOrigin": config["auth"]["origin"], "hostname": urlsplit(origin).hostname,
         "dnsResolver": ("[" + k["dnsResolver"] + "]" if ":" in k.get("dnsResolver", "") else k.get("dnsResolver", "10.96.0.10")),
         "tlsSecret": k.get("tlsSecret", ""), "storageNamespace": ns,
-        "tenants": [{"id": tenant, "release": tenant, "namespace": ns}],
+        "tenants": [{"id": tenant, "release": tenant, "namespace": ns, "toolsWssEnabled": config["toolsWssEnabled"]}],
         "storageEdgeEndpoint": f"http://{storage}-edge.{ns}.svc.cluster.local:8090",
         "authEndpoint": {"verify": verify, "external": external},
         "externalAuthNamespace": shared,
@@ -180,10 +180,12 @@ def helm(resolved):
                          "credentialSecretNames": ["aether-sparkroute-creds-" + tenant]},
     })
     tv = _merge(common, {"tenant": tenant, "phase": 4, "managedDatabases": not consolidated,
+                        "toolsWssEnabled": config["toolsWssEnabled"],
                         "sharedNamespace": ns, "storageNamespace": ns, "publicOrigin": origin,
                         "seedDevelopmentAdmin": False, "adminEmail": next(t["email"] for t in inputs["tenants"] if t["slug"] == tenant),
                         "images": _images(bindings, ["backend", "aether", "memorylayer", "connectors", "provider",
-                                                    "sahara", "sidecar", "code", "mlPostgres", "postgres", "skills", "sparkroute", "tools"],
+                                                    "sahara", "sidecar", "code", "mlPostgres", "postgres", "skills", "sparkroute"]
+                                                   + (["tools"] if config["toolsWssEnabled"] else []),
                                           not config["development"]),
                         "workProfiles": {"profiles": profiles["profiles"], "allowedProfiles": list(profiles["profiles"])},
                         "modelCatalog": {"records": models["records"]},

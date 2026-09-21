@@ -85,6 +85,39 @@ class DeploymentRenderTests(unittest.TestCase):
                          "memorylayer,dataconnectors,sparkroute,storage")
         self.assertNotIn("fixture-idp", services)
 
+    def test_tools_wss_can_be_disabled_without_disabling_agent_services(self):
+        self.fixture.config["toolsWssEnabled"] = False
+        self.bindings["images"].pop("tools")
+        resolved = self.resolved()
+        docker = compose(resolved)
+        services = docker["compose.yaml"]["services"]
+        self.assertNotIn("tools-example", services)
+        for name in ("provider-example", "bridge-example", "tool-catalog-example", "platform-example"):
+            self.assertIn(name, services)
+        self.assertIn("location = /example/tools/v1/connect { return 404; }", docker["nginx.conf"])
+        self.assertNotIn("http://tools-example:8090", docker["nginx.conf"])
+        outputs = helm(resolved)
+        self.assertFalse(outputs["helm/tenant.yaml"]["toolsWssEnabled"])
+        self.assertFalse(outputs["helm/serving.yaml"]["tenants"][0]["toolsWssEnabled"])
+        objects = []
+        for role, chart in (("serving", "shared"), ("tenant", "tenant")):
+            path = self.root / (role + ".yaml")
+            path.write_text(yaml.safe_dump(outputs["helm/" + role + ".yaml"]))
+            text = subprocess.check_output(["helm", "template", "example", str(ROOT / "charts" / ("platform-" + chart)),
+                "-f", str(path), "--kube-version", "1.36.0"], text=True, stderr=subprocess.PIPE)
+            objects.extend(obj for obj in yaml.safe_load_all(text) if obj)
+        self.assertFalse(any(obj["metadata"]["name"] in ("example-tools", "example-web-tools") for obj in objects))
+        config = next(obj for obj in objects if obj["kind"] == "ConfigMap" and "nginx.conf" in obj.get("data", {}))
+        self.assertIn("location = /example/tools/v1/connect { return 404; }", config["data"]["nginx.conf"])
+
+    def test_tools_wss_defaults_enabled_and_rejects_string_boolean(self):
+        resolved = self.resolved()
+        self.assertTrue(resolved["deployment"]["toolsWssEnabled"])
+        self.assertIn("tools-example", compose(resolved)["compose.yaml"]["services"])
+        self.fixture.config["toolsWssEnabled"] = "false"
+        with self.assertRaisesRegex(ValueError, "toolsWssEnabled"):
+            self.resolved()
+
     def test_chart_composition_has_one_database_and_host_wide_gate(self):
         outputs = helm(self.resolved())
         outputs["helm/tenant.yaml"]["modelCatalog"]["records"]["model-v4.1-flash"] = {}

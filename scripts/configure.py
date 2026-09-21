@@ -58,7 +58,7 @@ def certificate(directory, cn, ca=None, hosts=(), *, days=30):
     ext.unlink()
 
 
-def nginx(tenants):
+def nginx(tenants, *, tools_wss_enabled=True):
     # Explicit route allowlist. No request header or query parameter chooses upstream authority.
     text = '''worker_processes auto;
 events { worker_connections 1024; }
@@ -87,7 +87,8 @@ http {
     for tenant in tenants:
         slug = tenant['slug']
         variable = slug.replace('-', '_')
-        text += f'''    location = /{slug}/tools/v1/connect {{
+        if tools_wss_enabled:
+            text += f'''    location = /{slug}/tools/v1/connect {{
       proxy_pass_request_headers off;
       proxy_http_version 1.1;
       proxy_set_header Host $host;
@@ -107,6 +108,8 @@ http {
       proxy_pass $tools_{variable};
     }}
 '''
+        else:
+            text += f'    location = /{slug}/tools/v1/connect {{ return 404; }}\n'
         text += f'''    location = /_verify_{slug} {{
       internal;
       # Upload routes enforce their own limit; auth never forwards a body.

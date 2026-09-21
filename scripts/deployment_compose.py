@@ -106,7 +106,9 @@ def build(resolved, policy, resources):
                     del service["depends_on"][name]
     if not config["development"]:
         services.pop("fixture-idp", None)
-    conf = nginx(tenants)
+    if not config["toolsWssEnabled"]:
+        services.pop("tools-" + tenant, None)
+    conf = nginx(tenants, tools_wss_enabled=config["toolsWssEnabled"])
     if config["auth"]["mode"] == "shared":
         auth = bindings.get("auth", {})
         if not auth.get("verifyURL") or not auth.get("statusURL"):

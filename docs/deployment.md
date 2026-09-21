@@ -133,3 +133,13 @@ The backend report CLI supports versioned provider-cost and customer-price cards
 exact decimal rates, reproducible draft IDs and explicit unknown/missing coverage.
 An incomplete draft has no final total. It does not issue invoices or take payments.
 See the backend's `docs/usage-reporting.md` for its event and rate-card contracts.
+
+## Optional remote tool clients
+
+`toolsWssEnabled` defaults to `true`. Set it to `false` to omit tools-wss from
+compiled Compose and Helm deployments and return 404 on its browser endpoint.
+The web application's platform-server WebSocket, tool catalog, platform bridge
+and sandbox provider remain available. A direct Helm consumer sets
+`toolsWssEnabled: false` on platform-tenant and on the matching platform-shared
+`tenants[]` entry. Re-enabling requires applying the workload and serving values.
+Existing deployments must apply the new configuration to stop the old workload.

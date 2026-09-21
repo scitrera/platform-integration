@@ -24,7 +24,6 @@ images:
   postgres: ''
   skills: ''
   sparkroute: ''
-  tools: ''
 secrets:
   mlDatabase: memorylayer-db
   dcDatabase: connectors-db
@@ -95,6 +94,7 @@ readOnlyKVServices:
 modelCatalog:
   records: {}
 serviceGrants: []
+toolsWssEnabled: true
 toolsWorkspace: default
 existingClaims: {}
 blobUploadBaseURL: ''

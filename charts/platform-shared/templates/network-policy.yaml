@@ -249,6 +249,11 @@ spec:
 {{- end }}
 {{- end }}
 
+{{- $toolsWssEnabled := false }}
+{{- range .Values.tenants }}
+{{- if ne .toolsWssEnabled false }}{{ $toolsWssEnabled = true }}{{ end }}
+{{- end }}
+{{- if $toolsWssEnabled }}
 ---
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
@@ -265,6 +270,8 @@ spec:
       podSelector:
         matchLabels: {app.kubernetes.io/component: tools}
     ports: [{protocol: TCP, port: 8090}]
+
+{{- end }}
 
 {{- if .Values.externalAuthNamespace }}
 ---

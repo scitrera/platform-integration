@@ -20,7 +20,7 @@ import yaml
 ROOT_FIELDS = {
     "schemaVersion", "tenant", "inputs", "services", "database", "auth", "public",
     "resources", "backup", "billing", "profiles", "secretFiles", "customer",
-    "objectStorage", "development",
+    "objectStorage", "development", "toolsWssEnabled",
 }
 PROFILE_FIELDS = ROOT_FIELDS - {"schemaVersion", "tenant", "inputs", "profiles", "customer", "secretFiles"}
 INPUT_NAMES = {"tenants", "auth", "models", "documentServices", "memorylayer", "workProfiles", "review"}
@@ -167,6 +167,7 @@ def _validate(config):
     if not isinstance(config["tenant"], str) or not TOKEN.fullmatch(config["tenant"]):
         raise ConfigError("Invalid tenant")
     _boolean(config["development"], "development")
+    _boolean(config.setdefault("toolsWssEnabled", True), "toolsWssEnabled")
     production = not config["development"]
     _fields(config["inputs"], INPUT_NAMES, "inputs", INPUT_NAMES)
     _fields(config["services"], {"frontend", "storage", "sparkroute"}, "services",
