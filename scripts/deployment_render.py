@@ -181,7 +181,7 @@ def helm(resolved):
     })
     tv = _merge(common, {"tenant": tenant, "phase": 4, "managedDatabases": not consolidated,
                         "toolsWssEnabled": config["toolsWssEnabled"],
-                        "sharedNamespace": ns, "storageNamespace": ns, "publicOrigin": origin,
+                        "sharedNamespace": ns, "storageNamespace": ns, "storageRelease": storage, "publicOrigin": origin,
                         "seedDevelopmentAdmin": False, "adminEmail": next(t["email"] for t in inputs["tenants"] if t["slug"] == tenant),
                         "images": _images(bindings, ["backend", "aether", "memorylayer", "connectors", "provider",
                                                     "sahara", "sidecar", "code", "mlPostgres", "postgres", "skills", "sparkroute"]

@@ -4,6 +4,8 @@ development: false
 bootstrapRevision: '1'
 sharedNamespace: platform-shared
 storageNamespace: platform-storage
+# Helm release owning the blobgw and edge Services in storageNamespace.
+storageRelease: storage
 publicOrigin: https://platform.example.test
 adminEmail: admin@example.test
 seedDevelopmentAdmin: false

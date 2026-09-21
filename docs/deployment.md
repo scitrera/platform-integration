@@ -167,3 +167,12 @@ values add matching egress; sandbox pods receive neither this access nor the bri
 certificate. `bindings.metering.openmeterEndpoint` can override the private API
 address; Compose installations should attach the shared `metering.networkName`.
 `images.metricsBridge` can pin this service independently from application images.
+
+### Storage release binding
+
+Tenant Helm values include `storageRelease` (default `storage`) alongside
+`storageNamespace`. Both connectors and MemoryLayer derive blobgw and edge
+addresses from that release. The common deployment renderer binds this to the
+tenant's own storage release, matching the frontend's edge and internal download
+routes. A per-tenant deployment must not retain the shared `storage-blobgw` /
+`storage-edge` names when its Services have a tenant release prefix.

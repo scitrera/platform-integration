@@ -64,11 +64,11 @@ spec:
         - name: MEMORYLAYER_BLOB_STORAGE_SERVICE
           value: {{ .Values.documentBlobStorage.provider | quote }}
         - name: MEMORYLAYER_BLOBGW_URL
-          value: http://storage-blobgw.{{ .Values.storageNamespace }}.svc:8080
+          value: http://{{ .Values.storageRelease }}-blobgw.{{ .Values.storageNamespace }}.svc:8080
         - name: MEMORYLAYER_BLOBGW_DOMAIN
           value: {{ .Values.tenant | quote }}
         - name: MEMORYLAYER_BLOBGW_EDGE_URL
-          value: http://storage-edge.{{ .Values.storageNamespace }}.svc:8090
+          value: http://{{ .Values.storageRelease }}-edge.{{ .Values.storageNamespace }}.svc:8090
         - name: STATEFUL_ROOT
           value: /tmp/state
         - name: XDG_CONFIG_HOME

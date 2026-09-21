@@ -90,9 +90,9 @@ spec:
         - name: DC_BLOB_TYPE
           value: blobgw
         - name: DC_BLOBGW_URL
-          value: http://storage-blobgw.{{ .Values.storageNamespace }}.svc:8080
+          value: http://{{ .Values.storageRelease }}-blobgw.{{ .Values.storageNamespace }}.svc:8080
         - name: DC_BLOBGW_EDGE_URL
-          value: http://storage-edge.{{ .Values.storageNamespace }}.svc:8090
+          value: http://{{ .Values.storageRelease }}-edge.{{ .Values.storageNamespace }}.svc:8090
         - name: DC_BLOBGW_DOWNLOAD_REQUIRE_AUTH
           value: 'true'
         - name: DC_BLOBGW_DOMAIN

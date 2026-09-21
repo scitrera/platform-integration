@@ -160,6 +160,20 @@ class DeploymentRenderTests(unittest.TestCase):
         for obj in objects:
             if obj["kind"] == "Deployment":
                 self.assertEqual(obj["spec"]["template"]["spec"]["nodeSelector"], {"platform.scitrera.io/pool": "example"})
+        # Consumers must point at the Services rendered by this storage release,
+        # including per-tenant storage deployments rather than the shared default.
+        from urllib.parse import urlsplit
+        services = {obj["metadata"]["name"] for obj in objects if obj["kind"] == "Service"}
+        for component, prefix in (("connectors", "DC"), ("memorylayer", "MEMORYLAYER")):
+            deployment = next(obj for obj in objects if obj["kind"] == "Deployment"
+                and obj["metadata"]["name"].endswith("-" + component))
+            container = deployment["spec"]["template"]["spec"]["containers"][0]
+            environment = {entry["name"]: entry.get("value") for entry in container["env"]}
+            for suffix, role, port in (("URL", "blobgw", 8080), ("EDGE_URL", "edge", 8090)):
+                address = urlsplit(environment[prefix + "_BLOBGW_" + suffix])
+                self.assertEqual(address.hostname, "example-storage-" + role + ".tenant-example.svc")
+                self.assertEqual(address.port, port)
+                self.assertIn(address.hostname.split(".")[0], services)
         provider = next(obj for obj in objects if obj["kind"] == "Deployment" and obj["metadata"]["name"].endswith("-provider"))
         env = {v["name"]: v.get("value") for v in provider["spec"]["template"]["spec"]["containers"][0]["env"]}
         self.assertIn("SANDBOX_BLOB_FETCH_BASE_URL", env)
