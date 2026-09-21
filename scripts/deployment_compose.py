@@ -173,7 +173,7 @@ def build(resolved, policy, resources):
             "endpoint": s3["endpoint"], "region": s3["region"], "bucket": s3["bucket"],
             "prefix": s3.get("prefix", "packs"), "forcePathStyle": True, "credentialRef": tenant}}}
         upstream = urlsplit(s3["endpoint"])
-        conf = conf.replace("http://objects:9000", s3["endpoint"]).replace("Host objects:9000", "Host " + upstream.netloc)
+        conf = conf.replace("http://objects:9000", s3["endpoint"].rstrip("/")).replace("Host objects:9000", "Host " + upstream.netloc)
         conf = conf.replace("proxy_set_header Host " + upstream.netloc + ";",
                             "proxy_set_header Host " + upstream.netloc + ";\n      proxy_ssl_server_name on;\n      proxy_ssl_name " + upstream.hostname + ";\n      proxy_ssl_verify on;\n      proxy_ssl_trusted_certificate /etc/ssl/certs/ca-certificates.crt;")
         artifacts["nginx.conf"] = conf

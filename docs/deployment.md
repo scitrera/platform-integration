@@ -185,3 +185,9 @@ For an isolated Helm image update, retain the current `bootstrapRevision` to
 avoid rerunning completed bootstrap Jobs; a full config render generates a new
 revision from all inputs. Production overrides require a registry manifest
 digest, like all other image bindings.
+
+Signed browser uploads preserve the original escaped request target after
+removing only the tenant upload-route prefix. Do not use NGINX `rewrite` on these
+paths: it decodes reserved filename characters and can invalidate the S3
+signature. The fixed upstream Host, tenant authentication, PUT-only policy and
+512 MiB application body limit still apply.

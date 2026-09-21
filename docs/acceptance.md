@@ -77,3 +77,18 @@ only the Sahara executable and resumes it in finally.
 These drills temporarily interrupt a disposable session or process. They do not
 prove crashed-worker replacement, multi-replica failover or external-provider
 behavior. Recovery/retention procedures and their limits are in operations.md.
+
+## Signed upload proxy
+
+Run `python3 tests/acceptance/upload_proxy.py --web-image IMAGE --python-image IMAGE
+--output .local/upload-proxy/acceptance.json` with existing local images (the
+Python image must provide `python`; the web image must provide NGINX). This creates
+disposable bounded containers and a random loopback listener. Supply
+`--internal-subnet CIDR --public-subnet CIDR` with two unused small subnets if the
+host's automatic Docker address pools are exhausted. All fixtures are synthetic.
+
+The check exercises basic Compose, customer Compose and Helm NGINX output. It
+verifies the exact escaped object path and signed query, restored Host, payload
+and content type, stripped browser credentials, and rejected unauthenticated,
+wrong-tenant and non-PUT requests. Real S3 signatures need separate cloud
+acceptance; this test proves request preservation through the actual proxy.

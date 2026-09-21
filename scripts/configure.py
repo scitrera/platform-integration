@@ -84,6 +84,14 @@ http {
     location = /source.tar.gz { try_files $uri =404; }
     location ^~ /assets/ { try_files $uri =404; }
 '''
+    # Use the original escaped request target, including its signed query.
+    # NGINX rewrite operates on decoded $uri and corrupts presigned object keys.
+    upload_maps = "".join(
+        f'  map $request_uri $upload_uri_{tenant["slug"].replace("-", "_")} {{\n'
+        f'    default "";\n    ~^/storage/{tenant["slug"]}/uploads(/.*)$ $1;\n  }}\n'
+        for tenant in tenants
+    )
+    text = text.replace("  server {", upload_maps + "  server {", 1)
     for tenant in tenants:
         slug = tenant['slug']
         variable = slug.replace('-', '_')
@@ -163,8 +171,8 @@ http {
       client_max_body_size 512m;
       proxy_request_buffering off;
       set $upload_{variable} http://objects:9000;
-      rewrite ^/storage/{slug}/uploads/(.*)$ /$1 break;
-      proxy_pass $upload_{variable};
+      if ($upload_uri_{variable} = "") {{ return 400; }}
+      proxy_pass $upload_{variable}$upload_uri_{variable};
     }}
 '''
         text += f'''    location ~ ^/storage/{slug}/(blob|staged|finalize)/ {{

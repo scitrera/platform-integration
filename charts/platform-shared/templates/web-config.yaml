@@ -13,6 +13,15 @@ data:
       default_type application/octet-stream;
       resolver {{ .Values.dnsResolver }} valid=5s ipv6=off;
       map $http_upgrade $connection_upgrade { default upgrade; '' close; }
+      {{- if .Values.uploadProxy.enabled }}
+      {{- range .Values.tenants }}
+      # Preserve the escaped path and signed query; rewrite decodes object keys.
+      map $request_uri $upload_uri_{{ .id | replace "-" "_" }} {
+        default "";
+        ~^/storage/{{ .id }}/uploads(/.*)$ $1;
+      }
+      {{- end }}
+      {{- end }}
       access_log off;
       server {
         listen 8080;
@@ -105,9 +114,9 @@ data:
           proxy_set_header Content-Length $http_content_length;
           client_max_body_size 512m;
           proxy_request_buffering off;
-          set $upload_{{ .id }} {{ required "uploadProxy.endpoint is required" $.Values.uploadProxy.endpoint }};
-          rewrite ^/storage/{{ .id }}/uploads/(.*)$ /$1 break;
-          proxy_pass $upload_{{ .id }};
+          set $upload_{{ .id }} {{ required "uploadProxy.endpoint is required" $.Values.uploadProxy.endpoint | trimSuffix "/" }};
+          if ($upload_uri_{{ .id | replace "-" "_" }} = "") { return 400; }
+          proxy_pass $upload_{{ .id }}$upload_uri_{{ .id | replace "-" "_" }};
         }
     {{ end }}
         location ~ ^/storage/{{ .id }}/(blob|staged|finalize)/ {
