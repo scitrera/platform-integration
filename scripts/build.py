@@ -117,6 +117,9 @@ def main():
             run(['docker','build',*dependency_args,'--label','org.opencontainers.image.revision='+revision,
                  '--build-arg','SOURCE_REVISION='+revision,'--build-arg','REVISION='+revision,
                  '-f',str(source/RECIPES[key][1]),'-t',tag,str(source)])
+        if key=='MEMORYLAYER_IMAGE':
+            # A fresh enterprise wrapper can still embed an obsolete core client.
+            run(['python3', str(ROOT/'tests/acceptance/memorylayer_document_client.py'), '--image', tag])
         if key=='ML_CNPG_IMAGE':
             # CNPG validates the PostgreSQL version in the image tag.
             version=output(['docker','run','--rm','--network','none','--entrypoint','postgres',tag,'--version'])
