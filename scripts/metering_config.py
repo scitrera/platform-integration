@@ -25,7 +25,7 @@ BUDGETS = {
 }
 METERS = ("tokens_in", "tokens_out", "cached_tokens_in", "cache_write_tokens",
           "ocr_pages", "embedding_inputs", "time_seconds", "cpu_time", "gpu_time",
-          "ram_time", "storage_gb_seconds", "usage_unknown")
+          "ram_time", "storage_gb_seconds", "usage_unknown", "startups")
 
 
 def openmeter_config():
@@ -47,7 +47,11 @@ def openmeter_config():
         # balance or billing worker is started by the reporting installation.
         "meters": [{"slug": name, "eventType": name, "aggregation": "SUM", "valueProperty": "$.qty",
                     "groupBy": {key: "$." + key for key in ("model", "provider", "workspace", "kind")}}
-                   for name in METERS],
+                   for name in METERS] + [
+            {"slug": "active_users", "eventType": "active_user_ping", "aggregation": "UNIQUE_COUNT",
+             "valueProperty": "$.user", "groupBy": {"workspace": "$.workspace"}},
+            {"slug": "licensed_users", "eventType": "licensed_users", "aggregation": "SUM",
+             "valueProperty": "$.qty"}],
     }
 
 

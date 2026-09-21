@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 {{- if not .Values.development }}
 {{- range $name, $image := .Values.images }}
-{{- if not (regexMatch "@sha256:[a-f0-9]{64}$" $image) }}
+{{- if and (or (ne $name "tools") $.Values.toolsWssEnabled) (not (regexMatch "@sha256:[a-f0-9]{64}$" $image)) }}
 {{- fail (printf "production images.%s must use a registry manifest digest" $name) }}
 {{- end }}{{- end }}{{- end }}
 
@@ -50,3 +50,8 @@
 {{- end }}
 {{- end }}
 {{- end }}
+
+{{- if and .Values.metricsBridge.enabled .Values.metricsBridge.image (not .Values.development) }}
+{{- if not (regexMatch "@sha256:[a-f0-9]{64}$" .Values.metricsBridge.image) }}
+{{- fail "metricsBridge.image must use a registry manifest digest" }}
+{{- end }}{{- end }}

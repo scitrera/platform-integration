@@ -230,6 +230,23 @@ def build(resolved, policy, resources):
         if metering.get("networkName"):
             document["networks"]["billing"] = {"external": True, "name": metering["networkName"]}
             services["usage-collector-" + tenant]["networks"].append("billing")
+        from deployment_metrics import environment as metrics_environment
+        bridge = copy.deepcopy(services["usage-collector-" + tenant])
+        bridge["image"] = bindings.get("images", {}).get("metricsBridge", bridge["image"])
+        bridge.pop("env_file", None)
+        bridge.pop("healthcheck", None)
+        bridge["command"] = ["python", "-m", "x_metrics_bridge"]
+        bridge["environment"] = {**metrics_environment(tenant, metering.get("openmeterEndpoint", "http://metering-api:8888")),
+            "AETHER_GATEWAY": "aether-" + tenant + ":50051", "AETHER_TLS_ENABLED": "true",
+            "AETHER_TLS_CA_CERT": "/run/tls/ca.crt", "AETHER_TLS_CLIENT_CERT": "/run/tls/tls.crt",
+            "AETHER_TLS_CLIENT_KEY": "/run/tls/tls.key", "SCITRERA_TENANT": tenant,
+            "STATEFUL_ROOT": "/tmp/state", "XDG_CONFIG_HOME": "/tmp/config", "BRIDGE_SERVER_PORT": "53002"}
+        bridge["volumes"] = [INSTALL + "/.local/" + tenant + "/tls/metrics-bridge:/run/tls:ro"]
+        bridge["healthcheck"] = {"test": ["CMD", "python", "-c",
+            "import urllib.request; urllib.request.urlopen('http://127.0.0.1:53002/health',timeout=5).read()"],
+            "interval": "30s", "timeout": "6s", "retries": 5}
+        bridge["depends_on"] = {"aether-" + tenant: {"condition": "service_healthy"}}
+        services["metrics-bridge-" + tenant] = bridge
     document = _merge(document, policy)
     from deployment_customer import compose as customer_compose
     customer_compose(resolved, document)

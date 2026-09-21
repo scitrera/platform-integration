@@ -143,3 +143,27 @@ and sandbox provider remain available. A direct Helm consumer sets
 `toolsWssEnabled: false` on platform-tenant and on the matching platform-shared
 `tenants[]` entry. Re-enabling requires applying the workload and serving values.
 Existing deployments must apply the new configuration to stop the old workload.
+
+### Usage snapshots and Aether metrics
+
+A non-off billing mode installs both the SparkRoute ledger collector and one
+`metrics::shard0` metrics bridge per tenant. The bridge uses a dedicated tenant-CA
+certificate, the existing billing KV grants and ACL roster-read permission. It
+writes encrypted `billing:openmeter` and `billing:usage_snapshot` records for the
+tenant admin screen; usage-only configuration does not create an invoice subscription.
+Snapshots refresh immediately and every five minutes, using the installed meter list.
+
+SparkRoute's committed ledger owns token totals (including sidecar model calls).
+The bridge excludes duplicate `tokens_in`/`tokens_out` events while retaining
+activity pings and any resource metrics emitted over Aether. Sidecar2 currently
+emits model tokens; configured CPU/RAM/storage meters alone do not establish that
+those resources have producers. The existing live bridge has bounded HTTP retries;
+unlike the ledger collector, it does not persist a durable outbox. Resource-event
+replay and dynamic seat-count billing need qualification before using them for invoices.
+
+Shared metering's `kubernetes.tenantNamespaces` installs ingress limited to each
+listed namespace's `metrics-bridge` pods on the OpenMeter API port. Tenant Helm
+values add matching egress; sandbox pods receive neither this access nor the bridge
+certificate. `bindings.metering.openmeterEndpoint` can override the private API
+address; Compose installations should attach the shared `metering.networkName`.
+`images.metricsBridge` can pin this service independently from application images.

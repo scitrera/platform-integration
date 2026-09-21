@@ -63,3 +63,17 @@ class MeteringDeploymentTests(unittest.TestCase):
         config['kubernetes']['password'] = 'must-not-be-config'
         with self.assertRaises(ValueError):
             generate(config, 'kubernetes')
+
+
+def test_metrics_bridge_ingress_is_namespace_and_component_scoped():
+    from metering_kubernetes import render
+    objects = render(namespace="shared", storage_class="test", postgres_host="openmeter-db-rw",
+        postgres_secret="db", credentials_secret="metering", tenant_namespaces=["tenant-example"])
+    policy = next(o for o in objects if o["metadata"]["name"] == "metering-bridge-tenant-example")
+    rule = policy["spec"]["ingress"][0]
+    assert rule["ports"] == [{"protocol": "TCP", "port": 8888}]
+    assert rule["from"] == [{"namespaceSelector": {"matchLabels": {"kubernetes.io/metadata.name": "tenant-example"}},
+                              "podSelector": {"matchLabels": {"app.kubernetes.io/component": "metrics-bridge"}}}]
+    meters = {m["slug"]: m for m in openmeter_config()["meters"]}
+    assert meters["active_users"]["aggregation"] == "UNIQUE_COUNT"
+    assert meters["licensed_users"]["eventType"] == "licensed_users"

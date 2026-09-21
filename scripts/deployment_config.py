@@ -255,7 +255,7 @@ def _bindings(value):
                        "tlsSecret", "serviceAccountAnnotations", "kubeVersion", "dnsResolver", "apiEgress", "ingressEnabled"},
         "compose": {"project", "bindAddress", "webPort", "adminPort", "idpPort", "networkCIDR"},
         "auth": {"verifyURL", "statusURL", "operatorSecret"},
-        "metering": {"endpoint", "credentialSecret", "networkName"},
+        "metering": {"endpoint", "openmeterEndpoint", "credentialSecret", "networkName"},
         "objectStorage": {"endpoint", "region", "bucket", "prefix", "credentialsSecret", "credentialMode", "roleARN", "serviceAccountAnnotations"},
         "backup": {"endpoint", "region", "bucket", "prefix", "credentialsSecret", "serviceAccountAnnotations"},
     }
@@ -286,7 +286,7 @@ def _bindings(value):
         if name in value and (not isinstance(value[name], dict)
                               or any(not isinstance(v, str) or not v for v in value[name].values())):
             raise ConfigError("Expected named references in bindings." + name)
-    for section, fields in (("auth", ("verifyURL", "statusURL")), ("metering", ("endpoint",)),
+    for section, fields in (("auth", ("verifyURL", "statusURL")), ("metering", ("endpoint", "openmeterEndpoint")),
                             ("objectStorage", ("endpoint",)), ("backup", ("endpoint",))):
         for field in fields:
             if field not in value.get(section, {}):

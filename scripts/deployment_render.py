@@ -221,6 +221,11 @@ def helm(resolved):
         metering = bindings.get("metering", {})
         if not metering.get("endpoint") or not metering.get("credentialSecret"):
             raise ConfigError("Usage reporting requires private endpoint and credentialSecret bindings")
+        from deployment_metrics import environment as metrics_environment
+        tv["metricsBridge"] = {"enabled": True, "namespace": shared,
+            "image": bindings["images"].get("metricsBridge", bindings["images"]["backend"]),
+            "environment": metrics_environment(tenant, metering.get("openmeterEndpoint",
+                f"http://metering-api.{shared}.svc.cluster.local:8888"))}
         tv["usageReporting"] = {"enabled": True, "endpoint": metering["endpoint"],
             "credentialSecret": metering["credentialSecret"], "namespace": shared,
             "databaseCluster": tenant + "-postgres-db" if consolidated else serving + "-gateway-db"}

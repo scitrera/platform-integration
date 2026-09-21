@@ -35,6 +35,11 @@
       "additionalProperties": {
         "type": "string",
         "minLength": 1
+      },
+      "properties": {
+        "tools": {
+          "type": "string"
+        }
       }
     },
     "secrets": {
@@ -469,6 +474,30 @@
     },
     "toolsWssEnabled": {
       "type": "boolean"
+    },
+    "metricsBridge": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "image": {
+          "type": "string"
+        },
+        "namespace": {
+          "type": "string"
+        },
+        "tlsSecret": {
+          "type": "string"
+        },
+        "environment": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        }
+      }
     }
   },
   "required": [

@@ -243,7 +243,7 @@ def main():
         certificate(ca, f'{args.project}-{slug}-development-ca')
         certificate(tls/'server',f'aether-{slug}',ca,[f'aether-{slug}','aether-gateway',
                     f'aether-gateway.tenant-{slug}.svc.cluster.local','localhost'])
-        for name,cn in {'orchestrator':'orc::default::bootstrap','management':'sv::scitrera-management-plane::bootstrap',
+        for name,cn in {'metrics-bridge':'metrics::shard0','orchestrator':'orc::default::bootstrap','management':'sv::scitrera-management-plane::bootstrap',
                         'anonymous':'_anonymous','platform-server':f'sv::platform-server::{slug}',
                         'platform-bridge':f'sv::platform-bridge::{slug}','memorylayer':f'sv::memorylayer::{slug}',
                         'data-connectors':f'sv::data-connectors::{slug}','tool-catalog':f'sv::tool-catalog::{slug}',

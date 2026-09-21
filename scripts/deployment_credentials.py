@@ -85,7 +85,7 @@ def tls_material(state, tenant, namespace, customer=None, source=None):
     openssl('x509', '-checkend', str(7*86400), '-noout', '-in', ca/'tls.crt')
     certificate(tls/'server', tenant+'-aether', ca,
         [tenant+'-aether', tenant+'-aether.'+namespace+'.svc', tenant+'-aether.'+namespace+'.svc.cluster.local'], days=90)
-    principals = {'orchestrator': 'orc::default::bootstrap', 'management': 'sv::scitrera-management-plane::bootstrap',
+    principals = {'metrics-bridge': 'metrics::shard0', 'orchestrator': 'orc::default::bootstrap', 'management': 'sv::scitrera-management-plane::bootstrap',
         'anonymous': '_anonymous', 'model-catalog': 'sv::sparkroute-modelcatalog::gateway',
         **{role: 'sv::'+role+'::'+tenant for role in ('platform-server', 'platform-bridge', 'memorylayer',
             'data-connectors', 'sandbox-provider', 'tool-catalog', 'tools-wss-client')}}

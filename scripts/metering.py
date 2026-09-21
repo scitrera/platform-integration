@@ -61,12 +61,12 @@ def generate(config, runtime):
     from metering_kubernetes import render, reporting
     k = config.get("kubernetes", {})
     _fields(k, {"namespace", "storageClass", "nodeSelector", "tolerations", "postgresHost", "postgresSecret",
-                "credentialsSecret", "reportingEnvironmentSecret", "producerSecret", "journalCluster"},
+                "credentialsSecret", "reportingEnvironmentSecret", "producerSecret", "journalCluster", "tenantNamespaces"},
             "metering.kubernetes", {"namespace", "storageClass", "postgresHost", "postgresSecret",
                                    "credentialsSecret", "reportingEnvironmentSecret", "producerSecret", "journalCluster"})
     objects = render(namespace=k["namespace"], storage_class=k["storageClass"],
         postgres_host=k["postgresHost"], postgres_secret=k["postgresSecret"], credentials_secret=k["credentialsSecret"],
-        node_selector=k.get("nodeSelector", {}), tolerations=k.get("tolerations", []), images=images, production=production)
+        node_selector=k.get("nodeSelector", {}), tolerations=k.get("tolerations", []), images=images, production=production, tenant_namespaces=k.get("tenantNamespaces", []))
     objects += reporting(namespace=k["namespace"], backend_image=backend,
         environment_secret=k["reportingEnvironmentSecret"], producer_secret=k["producerSecret"],
         journal_cluster=k["journalCluster"], node_selector=k.get("nodeSelector", {}), tolerations=k.get("tolerations", []))

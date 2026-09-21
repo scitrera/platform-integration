@@ -12,6 +12,7 @@ storage:
   className: ''
   size: 10Gi
 images:
+  tools: ""
   backend: ''
   aether: ''
   memorylayer: ''
@@ -138,3 +139,10 @@ usageReporting:
   credentialSecret: ""
   namespace: ""
   databaseCluster: ""
+
+metricsBridge:
+  enabled: false
+  image: "" # Optional independently rolled backend image.
+  namespace: platform-shared
+  tlsSecret: aether-client-metrics-bridge
+  environment: {}

@@ -12,7 +12,7 @@ def quantity(value):
 
 def render(*, namespace, storage_class, postgres_host, postgres_secret,
            credentials_secret, node_selector=None, tolerations=None, images=None,
-           production=True, storage_sizes=None):
+           production=True, storage_sizes=None, tenant_namespaces=None):
     document = compose_config(images=images, production=production)
     node_selector, tolerations = node_selector or {}, tolerations or []
     labels = {"app.kubernetes.io/instance": "metering", "platform.scitrera.io/trust": "service"}
@@ -133,6 +133,19 @@ def render(*, namespace, storage_class, postgres_host, postgres_secret,
                             {"to": [{"namespaceSelector": {"matchLabels": {"kubernetes.io/metadata.name": "kube-system"}},
                                       "podSelector": {"matchLabels": {"k8s-app": "kube-dns"}}}],
                              "ports": [{"protocol": "UDP", "port": 53}, {"protocol": "TCP", "port": 53}]}]}})
+    if tenant_namespaces is not None and (not isinstance(tenant_namespaces, list)
+            or any(not isinstance(ns, str) for ns in tenant_namespaces)):
+        raise ValueError("tenantNamespaces must be a list of namespace names")
+    for tenant_namespace in dict.fromkeys(tenant_namespaces or []):
+        if not re.fullmatch(r"[a-z0-9][a-z0-9-]{0,62}", tenant_namespace):
+            raise ValueError("Invalid tenant namespace")
+        result.append({"apiVersion": "networking.k8s.io/v1", "kind": "NetworkPolicy",
+            "metadata": {"name": "metering-bridge-" + tenant_namespace, "namespace": namespace},
+            "spec": {"podSelector": {"matchLabels": {"app.kubernetes.io/component": "metering-api"}},
+                "policyTypes": ["Ingress"], "ingress": [{"from": [{
+                    "namespaceSelector": {"matchLabels": {"kubernetes.io/metadata.name": tenant_namespace}},
+                    "podSelector": {"matchLabels": {"app.kubernetes.io/component": "metrics-bridge"}}}],
+                    "ports": [{"protocol": "TCP", "port": 8888}]}]}})
     return result
 
 

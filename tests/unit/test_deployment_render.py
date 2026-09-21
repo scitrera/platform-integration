@@ -47,6 +47,23 @@ class DeploymentRenderTests(unittest.TestCase):
     def resolved(self):
         return self.fixture.run_config(self.bindings)
 
+    def test_billing_installs_matching_bridge_policy(self):
+        self.bindings["metering"]["openmeterEndpoint"] = "http://private-metering:8888"
+        self.bindings["images"]["metricsBridge"] = "registry.example/bridge@sha256:" + "2"*64
+        resolved = self.resolved()
+        docker, kube = compose(resolved), helm(resolved)
+        bridge = docker["compose.yaml"]["services"]["metrics-bridge-example"]
+        policy = kube["helm/tenant.yaml"]["metricsBridge"]
+        self.assertTrue(policy["enabled"])
+        self.assertEqual(bridge["image"], policy["image"])
+        self.assertEqual(policy["environment"]["OPENMETER_API_URL"], "http://private-metering:8888")
+        for name in ("BILLING_METRICS_EXCLUDE", "BILLING_USAGE_METER_SLUGS", "BILLING_USAGE_ONLY"):
+            self.assertEqual(bridge["environment"][name], policy["environment"][name])
+        self.assertEqual(policy["environment"]["BILLING_METRICS_EXCLUDE"], "tokens_in,tokens_out")
+        self.assertNotIn("env_file", bridge)  # no gateway database or model credentials
+        self.assertIn("/tls/metrics-bridge:/run/tls:ro", bridge["volumes"][0])
+        self.assertIn("ocr_pages", policy["environment"]["BILLING_USAGE_METER_SLUGS"])
+
     def test_browser_session_ttl_reaches_compose_and_helm(self):
         self.fixture.config["auth"].update(mode="local", sessionTTL="8h")
         resolved = self.resolved()
