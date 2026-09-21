@@ -1,12 +1,13 @@
 """Private auth-go operator session client shared by installation tools."""
 # SPDX-License-Identifier: AGPL-3.0-only
 import http.cookiejar
+import http.client
 from ipaddress import ip_address
 import json
 import time
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlsplit
-from urllib.request import build_opener, HTTPCookieProcessor, HTTPRedirectHandler, Request
+from urllib.request import build_opener, HTTPCookieProcessor, HTTPRedirectHandler, HTTPSHandler, ProxyHandler, Request
 
 
 def validate_origin(origin):
@@ -33,14 +34,39 @@ class NoRedirect(HTTPRedirectHandler):
         raise HTTPError(req.full_url, code, "Operator redirects are not allowed", headers, fp)
 
 
+class LoopbackTunnel(HTTPSHandler):
+    """Keep HTTPS Host/Origin/cookie semantics over a local kubectl/SSH tunnel.
+
+    No certificate verification is bypassed on a remote connection: the only
+    plaintext transport allowed here is an explicitly selected loopback port.
+    """
+    def __init__(self, connect_to):
+        super().__init__()
+        target = urlsplit(validate_origin(connect_to))
+        if target.scheme != "http":
+            raise ValueError("Operator tunnel must be an HTTP loopback endpoint")
+        self.target = target
+
+    def https_open(self, req):
+        req.add_unredirected_header("Host", req.host)
+        def connection(host, timeout=15, **kwargs):
+            return http.client.HTTPConnection(self.target.hostname, self.target.port or 80, timeout=timeout)
+        return self.do_open(connection, req)
+
+
 class Operator:
-    def __init__(self,origin,token,operator="operator"):
+    def __init__(self,origin,token,operator="operator",connect_to=None):
         origin = validate_origin(origin)
         if not token or not operator:
             raise ValueError("An operator name and nonempty token are required")
         self.origin=origin
         self.base=origin+'/api/auth-admin/v1'
-        self.opener=build_opener(NoRedirect(), HTTPCookieProcessor(http.cookiejar.CookieJar()))
+        handlers = [NoRedirect(), HTTPCookieProcessor(http.cookiejar.CookieJar())]
+        if connect_to:
+            if urlsplit(origin).scheme != "https":
+                raise ValueError("A tunnel requires the configured HTTPS operator origin")
+            handlers.extend([ProxyHandler({}), LoopbackTunnel(connect_to)])
+        self.opener=build_opener(*handlers)
         self.csrf=''
         deadline=time.monotonic()+60
         while True:

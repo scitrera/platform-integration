@@ -29,6 +29,10 @@ class DeploymentCredentialTests(test_deployment_render.DeploymentRenderTests):
         for name,field in [('memorylayer-env','MEMORYLAYER_POSTGRESQL_URL'),('connectors-env','DC_POSTGRESQL_URL'),
                            ('gateway-env','SPARKROUTE_POSTGRES_URL'),('storage-env','BLOBGW_DATABASE_URL')]:
             self.assertEqual(urlsplit(docs[name]['stringData'][field]).hostname,'example-postgres-db-rw')
+        for name, field in [('memorylayer-env', 'MEMORYLAYER_POSTGRESQL_URL'), ('connectors-env', 'DC_POSTGRESQL_URL')]:
+            url = urlsplit(docs[name]['stringData'][field])
+            self.assertEqual(url.scheme, 'postgresql+asyncpg')
+            self.assertEqual(url.query, 'ssl=require')
         source = docs['usage-producer']['stringData']
         self.assertEqual(source['BILLING_PRODUCER_TOKEN'],identity['usageProducerToken'])
 

@@ -34,10 +34,12 @@ required host-auth policy for subsequent activation.
 application databases and roles. It is an installation choice, not an automatic
 merge of existing databases. Shared auth, OpenMeter and usage reporting may use
 separate PostgreSQL releases via `charts/platform-postgres`. That chart's physical
-backup resources target CNPG 1.30 and Barman Cloud plugin 0.15. The existing
-shared/storage/tenant charts retain their Kubernetes 1.34 compatibility gate
-until newer runtime acceptance is complete. Offline schema validation against
-Kubernetes 1.36 does not replace that acceptance.
+backup resources target CNPG 1.30 and Barman Cloud plugin 0.15. The
+shared/storage/tenant charts accept Kubernetes 1.34–1.36. The 1.34 disposable
+fixture remains the reproducible baseline; a 1.36 EKS deployment has completed
+all bootstrap phases and synthetic storage/access checks. Full browser OAuth,
+backup restore and node-failure acceptance remain deployment-specific checks;
+chart rendering or healthy Pods alone do not establish them.
 
 `scripts/deployment_credentials.py` creates private Secret manifests for a new
 consolidated tenant or imports an existing Compose installation's identities.

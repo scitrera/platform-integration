@@ -74,6 +74,8 @@ spec:
         - s3
         - -s3-endpoint
         - $(S3_ENDPOINT)
+        - -s3-region
+        - $(AWS_REGION)
         - -s3-bucket
         - {{ .Values.stagingBucket | quote }}
         - -s3-force-path-style

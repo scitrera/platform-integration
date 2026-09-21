@@ -48,6 +48,11 @@ def database_url(user, password, host, database=None):
     return 'postgresql://' + quote(user, safe='') + ':' + quote(password, safe='') + '@' + host + ':5432/' + quote(database or user, safe='') + '?sslmode=require'
 
 
+def sqlalchemy_async_url(url):
+    """SQLAlchemy's asyncpg dialect accepts ssl, not libpq's sslmode keyword."""
+    return url.replace('postgresql://', 'postgresql+asyncpg://', 1).replace('?sslmode=require', '?ssl=require')
+
+
 def initial_identity(tenant, source=None):
     """Import identity, never rotate it as an incidental deployment side effect."""
     if source:
@@ -127,13 +132,13 @@ def tenant_secrets(resolved, identity, tls, env):
     secret('aether-config', {'AETHER_TOKEN_HMAC_KEY': identity['aetherHMAC'],
         'AETHER_ADMIN_API_KEY': identity['aetherAdmin'], 'TOOL_CATALOG_CURSOR_KEY': identity['aetherHMAC']})
     gateway = 'http://'+tenant+'-serving-gateway.'+ns+'.svc.cluster.local:8080/v1'
-    secret('memorylayer-env', {'MEMORYLAYER_POSTGRESQL_URL': urls['memorylayer'],
+    secret('memorylayer-env', {'MEMORYLAYER_POSTGRESQL_URL': sqlalchemy_async_url(urls['memorylayer']),
         'MEMORYLAYER_RATE_LIMIT_REQUESTS': '10000', 'MEMORYLAYER_TENANT_ID': tenant,
         'MEMORYLAYER_LLM_PROFILE_DEFAULT_PROVIDER': 'openai', 'MEMORYLAYER_LLM_PROFILE_DEFAULT_MODEL': 'memorylayer-default',
         'MEMORYLAYER_LLM_PROFILE_DEFAULT_BASE_URL': gateway,
         'MEMORYLAYER_LLM_PROFILE_DEFAULT_API_KEY': identity['memorylayerGatewayToken'],
         'MEMORYLAYER_LLM_IDENTITY_HEADER_HOSTS': tenant+'-serving-gateway.'+ns+'.svc.cluster.local'})
-    secret('connectors-env', {'DC_POSTGRESQL_URL': urls['dataconnectors'],
+    secret('connectors-env', {'DC_POSTGRESQL_URL': sqlalchemy_async_url(urls['dataconnectors']),
         'DC_BLOBGW_UPLOAD_PUBLIC_URL': config['public']['origin']+'/storage/'+tenant+'/uploads',
         'DC_BLOBGW_EDGE_PUBLIC_URL': config['public']['origin']+'/storage/'+tenant})
     secret('platform-env', {})

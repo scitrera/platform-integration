@@ -87,6 +87,7 @@ class DeploymentRenderTests(unittest.TestCase):
 
     def test_chart_composition_has_one_database_and_host_wide_gate(self):
         outputs = helm(self.resolved())
+        outputs["helm/tenant.yaml"]["modelCatalog"]["records"]["model-v4.1-flash"] = {}
         objects = []
         for role, chart in (("serving", "shared"), ("tenant", "tenant"), ("storage", "storage"), ("postgres", "postgres")):
             path = self.root / (role + ".yaml")
@@ -95,6 +96,9 @@ class DeploymentRenderTests(unittest.TestCase):
                 str(ROOT / "charts" / ("platform-" + chart)), "-n", "tenant-example",
                 "-f", str(path), "--kube-version", "1.34.0"], text=True, stderr=subprocess.PIPE)
             objects.extend(obj for obj in yaml.safe_load_all(output) if obj)
+        bootstrap = next(obj for obj in objects if obj["kind"] == "ConfigMap" and "memorylayer_migrate.py" in obj.get("data", {}))
+        for script in ("memorylayer_migrate.py", "tenant_setup.py"):
+            self.assertEqual(bootstrap["data"][script], (ROOT / "scripts" / script).read_text())
         self.assertEqual(len([obj for obj in objects if obj["kind"] == "Cluster"]), 1)
         self.assertEqual(len([obj for obj in objects if obj["kind"] == "Database"]), 3)
         self.assertFalse(any(obj["kind"] == "Secret" for obj in objects))
@@ -123,6 +127,8 @@ class DeploymentRenderTests(unittest.TestCase):
         self.bindings["kubernetes"]["ingressEnabled"] = False
         serving = helm(self.resolved())["helm/serving.yaml"]
         self.assertEqual(serving["dnsResolver"], "10.100.0.10")
+        self.assertEqual(serving["modelCatalog"]["addressTemplate"].count("{tenant}"), 1)
+        self.assertEqual(serving["modelCatalog"]["serverNameTemplate"], "{tenant}-aether")
         self.assertEqual(serving["modelCatalog"]["apiEgress"], [{"cidr": "10.100.0.1/32", "port": 443}])
         self.assertFalse(serving["ingress"]["enabled"])
         self.assertTrue(serving["ingress"]["hostAuth"]["enabled"])

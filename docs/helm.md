@@ -2,7 +2,7 @@
 
 The reference topology uses three independent chart types: platform-shared,
 platform-storage, and one platform-tenant release per tenant. It requires
-Kubernetes 1.34, an enforcing CNI, a working ReadWriteOnce storage class,
+Kubernetes 1.34–1.36, an enforcing CNI, a working ReadWriteOnce storage class,
 CloudNativePG, and a Gateway API controller. Charts have no bundled chart
 dependencies; operator and CRD versions are separate installation inputs.
 No ArgoCD or private administration package is required.

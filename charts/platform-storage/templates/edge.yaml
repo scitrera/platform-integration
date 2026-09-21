@@ -78,6 +78,8 @@ spec:
         - {{ .Values.stagingBucket | quote }}
         - -s3-endpoint
         - $(S3_ENDPOINT)
+        - -s3-region
+        - $(AWS_REGION)
         - -s3-force-path-style
         - -key-seed-hex
         - $(EDGE_SIGNING_SEED)

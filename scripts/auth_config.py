@@ -204,6 +204,7 @@ def main(argv=None):
     parser.add_argument("action", choices=["check", "plan", "apply"])
     parser.add_argument("--file", required=True, type=Path)
     parser.add_argument("--origin", help="Private operator origin; defaults to this installation's loopback listener")
+    parser.add_argument("--connect-to", help="Optional HTTP loopback tunnel; --origin remains the configured HTTPS admin origin")
     parser.add_argument("--operators", type=Path, help="Auth-go bootstrap token file; defaults to .local/operators.json")
     parser.add_argument("--operator", default="operator")
     args = parser.parse_args(argv)
@@ -219,7 +220,7 @@ def main(argv=None):
                 raise ValueError("This installation uses fixture login; apply to the deployed auth-go origin instead")
         tokens = args.operators or ROOT / ".local/operators.json"
         token = json.loads(tokens.read_text())["operators"][args.operator]
-        operator = Operator(origin, token, operator=args.operator)
+        operator = Operator(origin, token, operator=args.operator, connect_to=args.connect_to)
         try:
             if args.action == "plan":
                 snapshot = read_snapshot(operator, slug)

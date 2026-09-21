@@ -29,6 +29,20 @@ and optionally `--operator NAME`. The listener must already be running. Remote
 operator access requires HTTPS; HTTP is restricted to loopback. Origin must
 match auth-go's configured admin origin. Redirects are refused.
 
+For an HTTPS-configured admin origin reached through a local tunnel, keep the
+configured origin and use `--connect-to` for the transport endpoint:
+
+```sh
+python3 scripts/auth_config.py apply --file /path/to/customer-auth.json \
+  --origin https://auth.example.com --connect-to http://127.0.0.1:18482 \
+  --operators /path/to/private/operators.json
+```
+
+The tunnel must target the admin listener, not the public login listener. This
+preserves Host, Origin, Secure session cookies and CSRF checks while sending the
+request through the explicitly selected loopback port. Remote plaintext tunnels,
+redirects and environment proxies are not allowed in this mode.
+
 The token file has auth-go's bootstrap format, `{"operators":{"NAME":"TOKEN"}}`.
 Use a private file, not a token argument or committed configuration. The client
 opens an operator session, sends its CSRF token and revision preconditions, and

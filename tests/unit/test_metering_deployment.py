@@ -48,6 +48,11 @@ class MeteringDeploymentTests(unittest.TestCase):
         self.assertEqual(env['POSTGRES_PASSWORD']['valueFrom']['secretKeyRef']['name'], 'openmeter-db')
         kafka = next(o for o in result if o['kind'] == 'Service' and o['metadata']['name'] == 'metering-kafka')
         self.assertEqual({p['port'] for p in kafka['spec']['ports']}, {9092, 9093})
+        self.assertTrue(kafka['spec']['publishNotReadyAddresses'])
+        pod = next(o for o in result if o['kind'] == 'Deployment' and o['metadata']['name'] == 'metering-kafka')
+        env = {e['name']: e.get('value') for e in pod['spec']['template']['spec']['containers'][0]['env']}
+        self.assertEqual(env['KAFKA_CONTROLLER_QUORUM_VOTERS'], '1@127.0.0.1:9093')
+        self.assertEqual(env['KAFKA_LOG_DIRS'], '/var/lib/kafka/data/logs')
 
     def test_production_refuses_mutable_images_and_embedded_passwords(self):
         config = self.config()

@@ -16,47 +16,7 @@ data:
     "mtls": {"required": true, "mode": "semi-strict"}, "api_key": {}, "oauth": {"verify_signature":
     true, "providers": []}}, "acl": {"required": false}, "lite": {"data_dir": "/data"},
     "log_level": "info"}'
-  memorylayer_migrate.py: "\"\"\"Serialize and invoke MemoryLayer's component-owned\
-    \ fresh/upgrade initializer.\"\"\"\nimport asyncio\nimport os\nimport asyncpg\n\
-    from memorylayer_saas.dependencies import preconfigure\nfrom memorylayer_saas.storage.postgresql\
-    \ import PostgreSQLBackend\n\nasync def main():\n    url=os.environ['MEMORYLAYER_POSTGRESQL_URL']\n\
-    \    lock=await asyncpg.connect(url.replace('postgresql+asyncpg://','postgresql://'))\n\
-    \    backend=None\n    try:\n        # The lock is held across the component's\
-    \ separate DDL connections.\n        await lock.execute(\"SET statement_timeout\
-    \ = '240s'\")\n        await lock.execute(\"SELECT pg_advisory_lock(hashtext('platform-memorylayer-migration'))\"\
-    )\n        variables,_=preconfigure()\n        backend=PostgreSQLBackend(v=variables,connection_string=url.replace(\"\
-    postgresql://\",\"postgresql+asyncpg://\"))\n        await backend.connect()\n\
-    \        if not await backend.health_check():raise RuntimeError('MemoryLayer storage\
-    \ readiness failed')\n        expected=int(os.environ.get('MEMORYLAYER_EMBEDDING_DIMENSIONS','1536'))\n\
-    \        columns=await lock.fetch(\"\"\"SELECT c.relname, a.attname, pg_catalog.format_type(a.atttypid,a.atttypmod)\
-    \ AS vector_type\n            FROM pg_catalog.pg_attribute a JOIN pg_catalog.pg_class\
-    \ c ON c.oid=a.attrelid\n            JOIN pg_catalog.pg_namespace n ON n.oid=c.relnamespace\n\
-    \            WHERE n.nspname=current_schema() AND a.attnum>0 AND NOT a.attisdropped\n\
-    \              AND pg_catalog.format_type(a.atttypid,a.atttypmod) LIKE 'vector(%)'\"\
-    \"\")\n        wrong=[row['relname']+'.'+row['attname'] for row in columns if\
-    \ row['vector_type']!='vector('+str(expected)+')']\n        if wrong:raise RuntimeError('Embedding\
-    \ dimension differs from existing schema: '+', '.join(wrong))\n        print('MemoryLayer\
-    \ schema initialization and embedding dimension verified')\n    finally:\n   \
-    \     if backend is not None:await backend.disconnect()\n        await lock.close()\n\
-    \nasyncio.run(asyncio.wait_for(main(),timeout=300))\n"
-  tenant_setup.py: "#!/usr/bin/env python3\n\"\"\"Invoke public setup primitives and\
-    \ verify the resulting workspace projection.\"\"\"\nimport asyncio\nimport os\n\
-    from scitrera_aether_client.client_async import AsyncServiceClient\nfrom scitrera_app_server.tenant_api.ml_client\
-    \ import MemoryLayerClient\nfrom scitrera_app_server.tenant_api.tenant_interface2\
-    \ import TenantInterface2\nfrom scitrera_app_server.provisioning.ti2_setup import\
-    \ setup_ti2\n\nasync def setup():\n    tenant=os.environ['TENANT_ID']\n    client=AsyncServiceClient(implementation='scitrera-management-plane',specifier='bootstrap',\n\
-    \        auto_reconnect=False,tls_enabled=True,\n        tls_root_cert_path=os.environ['AETHER_MGMT_TLS_CA_CERT'],\n\
-    \        tls_client_cert_path=os.environ['AETHER_MGMT_TLS_CLIENT_CERT'],\n   \
-    \     tls_client_key_path=os.environ['AETHER_MGMT_TLS_CLIENT_KEY'])\n    await\
-    \ client.connect(target=os.environ['AETHER_GATEWAY'])\n    try:\n        ml=MemoryLayerClient(aether_client=client,tenant_id=tenant,aether_target='sv::memorylayer')\n\
-    \        ti=TenantInterface2(tenant=tenant,aether_client=client,ml_client=ml)\n\
-    \        await setup_ti2(ti,client,os.environ.get('ADMIN_EMAIL',''),minimal=False,\n\
-    \                        seed_dev_admin=os.environ.get('SEED_DEV_ADMIN')=='true')\n\
-    \        workspaces=await ml.list_workspaces()\n        actual={entry['id'] for\
-    \ entry in workspaces}\n        required={'default','_tenant','_global','_global_user'}\n\
-    \        if not required<=actual:\n            raise RuntimeError('Bootstrap incomplete;\
-    \ missing workspaces: '+', '.join(sorted(required-actual)))\n        result=await\
-    \ ti.reconcile_all_workspace_access_projections(None,agent=True)\n        if result['workspaces_reconciled']<len(required):\n\
-    \            raise RuntimeError('Workspace projection was incomplete')\n     \
-    \   print('Verified public workspace bootstrap and strict access projection:',tenant)\n\
-    \    finally:\n        await client.close()\n\nif __name__=='__main__':\n    asyncio.run(asyncio.wait_for(setup(),timeout=240))\n"
+  memorylayer_migrate.py: |
+{{ .Files.Get "files/memorylayer_migrate.py" | indent 4 }}
+  tenant_setup.py: |
+{{ .Files.Get "files/tenant_setup.py" | indent 4 }}

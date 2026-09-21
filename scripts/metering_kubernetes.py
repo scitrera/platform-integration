@@ -51,7 +51,8 @@ def render(*, namespace, storage_class, postgres_host, postgres_secret,
                 secret, field = secret_keys[match[1]]
                 env.append({"name": key, "valueFrom": {"secretKeyRef": {"name": secret, "key": field}}})
             else:
-                env.append({"name": key, "value": postgres_host if key == "POSTGRES_HOST" else value})
+                env.append({"name": key, "value": (postgres_host if key == "POSTGRES_HOST" else
+                    "/var/lib/kafka/data/logs" if key == "KAFKA_LOG_DIRS" else value)})
         reservation, limit, cpu = BUDGETS.get(role, BUDGETS["api"])
         container = {"name": role, "image": service["image"], "env": env,
                      "resources": {"requests": {"cpu": "100m", "memory": quantity(reservation)},
@@ -76,6 +77,12 @@ def render(*, namespace, storage_class, postgres_host, postgres_secret,
                 volumes.append({"name": volume_name, "persistentVolumeClaim": {"claimName": source}})
                 mounts.append({"name": volume_name, "mountPath": target})
         container["volumeMounts"] = mounts
+        # The combined single-node broker/controller must bootstrap before the
+        # Service has ready endpoints. Loopback avoids a readiness dependency.
+        if role == "kafka":
+            for entry in env:
+                if entry["name"] == "KAFKA_CONTROLLER_QUORUM_VOTERS":
+                    entry["value"] = "1@127.0.0.1:9093"
         if role != "migrate":
             check = service["healthcheck"]["test"]
             probe = {"exec": {"command": (["sh", "-ec", check[1].replace("$$", "$")]
@@ -106,6 +113,11 @@ def render(*, namespace, storage_class, postgres_host, postgres_secret,
             result.append({"apiVersion": "v1", "kind": "Service",
                 "metadata": {"name": name, "namespace": namespace},
                 "spec": {"selector": component_labels,
+                         # Kafka clients follow the advertised Service address
+                         # even when bootstrapped over localhost by the probe.
+                         # Publish the single broker before readiness to avoid
+                         # a startup cycle; callers retry until Kafka is ready.
+                         **({"publishNotReadyAddresses": True} if role == "kafka" else {}),
                          "ports": [{"name": "tcp", "port": ports[role], "targetPort": ports[role]}]
                             + ([{"name": "controller", "port": 9093, "targetPort": 9093}] if role == "kafka" else [])}})
     result.append({"apiVersion": "networking.k8s.io/v1", "kind": "NetworkPolicy",
