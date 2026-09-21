@@ -135,6 +135,33 @@ class DeploymentRenderTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "toolsWssEnabled"):
             self.resolved()
 
+    def test_platform_image_override_only_changes_browser_backend(self):
+        baseline = helm(self.resolved())["helm/tenant.yaml"]
+        image = "registry.example.test/platform@sha256:" + "9" * 64
+        self.bindings["images"]["platform"] = image
+        updated = helm(self.resolved())["helm/tenant.yaml"]
+        # Config digests independently version bootstrap Jobs; hold it stable to
+        # isolate the effect of this runtime image binding on chart resources.
+        updated["bootstrapRevision"] = baseline["bootstrapRevision"]
+        rendered = []
+        for values in (baseline, updated):
+            path = self.root / "tenant.yaml"
+            path.write_text(yaml.safe_dump(values))
+            output = subprocess.check_output(["helm", "template", "example",
+                str(ROOT / "charts/platform-tenant"), "-f", str(path),
+                "--kube-version", "1.36.0"], text=True, stderr=subprocess.PIPE)
+            rendered.append({(obj["kind"], obj["metadata"]["name"]): obj
+                for obj in yaml.safe_load_all(output) if obj})
+        before, after = rendered
+        self.assertEqual(before.keys(), after.keys())
+        changed = [key for key in before if before[key] != after[key]]
+        self.assertEqual(changed, [("Deployment", "example-platform")])
+        container = after[changed[0]]["spec"]["template"]["spec"]["containers"][0]
+        self.assertEqual(container["image"], image)
+        self.bindings["images"]["platform"] = "registry.example.test/platform:latest"
+        with self.assertRaisesRegex(ValueError, "registry digest: platform"):
+            helm(self.resolved())
+
     def test_chart_composition_has_one_database_and_host_wide_gate(self):
         outputs = helm(self.resolved())
         outputs["helm/tenant.yaml"]["modelCatalog"]["records"]["model-v4.1-flash"] = {}

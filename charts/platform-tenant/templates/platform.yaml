@@ -44,7 +44,7 @@ spec:
       terminationGracePeriodSeconds: 30
       containers:
       - name: platform
-        image: {{ required "images.backend is required" .Values.images.backend | quote }}
+        image: {{ .Values.images.platform | default .Values.images.backend | required "images.backend or images.platform is required" | quote }}
         imagePullPolicy: IfNotPresent
         securityContext:
           allowPrivilegeEscalation: false

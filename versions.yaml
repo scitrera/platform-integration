@@ -39,13 +39,13 @@ verification_scope:
     new Kubernetes runtime acceptance not performed
 images:
   BACKEND_IMAGE:
-    tag: platform-integration/backend:4a62cd04e9a018e8
-    local_image_id: sha256:a455b21ef4b5b17b2e14a0c52ac64d6fb006323afe2d1e6c8d8efa626981c4bd
+    tag: platform-integration/backend:63ad2f397e06513f
+    local_image_id: sha256:dab06dda3885e49cb759e507e22a0c28f7c55a7ade5fc7370e93066ef992c320
     os: linux
     architecture: arm64
     registry_manifest_digests: []
     availability: Verified in local Docker engine; registry publication not established
-    source_set: platform-backend-4a62cd04e9a018e8
+    source_set: platform-backend-63ad2f397e06513f
   SAHARA_IMAGE:
     tag: platform-integration/sahara:68f2e2f931b04bcc
     local_image_id: sha256:30568e0bdea827dc65da16baa3769f6bec291e11eebabf54482e66360df4907f
@@ -209,11 +209,11 @@ images:
     availability: verified in local Docker engine; registry publication not established
     source_set: platform-backend-60dece1d39c0b694
 source_sets:
-  platform-backend-4a62cd04e9a018e8:
+  platform-backend-63ad2f397e06513f:
     component: platform-backend
     repository: https://github.com/scitrera/platform-backend.git
-    revision: 6b7704cfefd9a2b6613bd0555ac2772556ae418a
-    tracked_content_sha256: 4a62cd04e9a018e8aa9a1a7172069f402bb941a662ca1d2b8e5af1b54dcd7098
+    revision: e660eb60def624d160a05c79a0434b992253fd97
+    tracked_content_sha256: 63ad2f397e06513f3b79303473582bda01f56dfb85fca70eb7c32fc40ee16112
     dirty: false
     reviewed_file_count: 1807
     include_untracked: []

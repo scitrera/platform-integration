@@ -16,6 +16,7 @@ storage:
 images:
   tools: ""
   backend: ''
+  # Optional images.platform overrides only the browser-facing backend image.
   aether: ''
   memorylayer: ''
   connectors: ''

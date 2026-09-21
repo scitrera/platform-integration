@@ -176,3 +176,12 @@ addresses from that release. The common deployment renderer binds this to the
 tenant's own storage release, matching the frontend's edge and internal download
 routes. A per-tenant deployment must not retain the shared `storage-blobgw` /
 `storage-edge` names when its Services have a tenant release prefix.
+
+`bindings.images.platform` optionally pins the browser-facing backend separately
+from `bindings.images.backend`. The tenant Helm chart accepts the same optional
+`images.platform` value. Omitting it preserves the shared backend image default.
+This allows a backend UI transport update without restarting review workers.
+For an isolated Helm image update, retain the current `bootstrapRevision` to
+avoid rerunning completed bootstrap Jobs; a full config render generates a new
+revision from all inputs. Production overrides require a registry manifest
+digest, like all other image bindings.

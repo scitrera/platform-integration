@@ -185,7 +185,8 @@ def helm(resolved):
                         "seedDevelopmentAdmin": False, "adminEmail": next(t["email"] for t in inputs["tenants"] if t["slug"] == tenant),
                         "images": _images(bindings, ["backend", "aether", "memorylayer", "connectors", "provider",
                                                     "sahara", "sidecar", "code", "mlPostgres", "postgres", "skills", "sparkroute"]
-                                                   + (["tools"] if config["toolsWssEnabled"] else []),
+                                                   + (["tools"] if config["toolsWssEnabled"] else [])
+                                                   + (["platform"] if "platform" in bindings["images"] else []),
                                           not config["development"]),
                         "workProfiles": {"profiles": profiles["profiles"], "allowedProfiles": list(profiles["profiles"])},
                         "modelCatalog": {"records": models["records"]},
