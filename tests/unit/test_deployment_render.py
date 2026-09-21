@@ -47,6 +47,27 @@ class DeploymentRenderTests(unittest.TestCase):
     def resolved(self):
         return self.fixture.run_config(self.bindings)
 
+    def test_sahara_repository_identity_is_preserved(self):
+        for repository in ("registry.example:5000/team/sahara", "registry.example/team/agent-harness"):
+            self.bindings["images"]["sahara"] = repository + ":candidate@sha256:" + "1" * 64
+            with self.subTest(repository=repository):
+                self.assertEqual(helm(self.resolved())["helm/tenant.yaml"]["images"]["sahara"],
+                                 self.bindings["images"]["sahara"])
+        for repository in ("registry.example/team/shared:sahara", "registry.example/team/sahara-code-sidecar", "registry.example/sahara/nested"):
+            self.bindings["images"]["sahara"] = repository + "@sha256:" + "1" * 64
+            with self.subTest(repository=repository), self.assertRaisesRegex(ValueError, "Sahara image repository"):
+                helm(self.resolved())
+
+    def test_direct_helm_rejects_wrong_sahara_repository(self):
+        values = helm(self.resolved())["helm/tenant.yaml"]
+        values["images"]["sahara"] = "registry.example/shared:sahara@sha256:" + "1" * 64
+        path = self.root / "invalid-runtime.yaml"
+        path.write_text(yaml.safe_dump(values))
+        result = subprocess.run(["helm", "template", "example", str(ROOT / "charts/platform-tenant"),
+            "-f", str(path), "--kube-version", "1.36.0"], text=True, capture_output=True)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("images.sahara repository basename", result.stderr)
+
     def test_billing_installs_matching_bridge_policy(self):
         self.bindings["metering"]["openmeterEndpoint"] = "http://private-metering:8888"
         self.bindings["images"]["metricsBridge"] = "registry.example/bridge@sha256:" + "2"*64

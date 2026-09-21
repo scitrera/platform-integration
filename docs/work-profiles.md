@@ -34,3 +34,18 @@ On development hosts that exhaust Docker's automatic subnet pool, sandbox-provid
 Run the disposable two-user browser acceptance with `python3 scripts/run_compose_smoke.py --images .local/images.json --directory /tmp/profile-acceptance --work-profiles`. It checks shared allocation, private history after reload, immutable conversation selection, cross-user cancellation denial, the originating user's tool approval, and per-user gateway accounting. The second fixture user receives only temporary workspace/tool-service grants; cleanup removes those grants and tenant membership.
 
 See [local validation results](work-profile-verification.md) for the tested scope and pending external checks.
+
+
+### Runtime image identity
+
+Publish the Sahara runtime under a repository whose final path segment is
+`sahara` or `agent-harness`, including when using immutable digest references.
+The sandbox provider uses that identity to select Sahara initialization and
+sidecar health checks. A shared repository with only a `sahara-*` tag does not
+select the Sahara runtime. The Kubernetes compiler and tenant chart reject
+incompatible image names before rollout.
+
+Work profiles are provider-managed in both Compose and Kubernetes: one live
+Sahara instance is shared by a profile's users, with workspace and task authority
+retained per request. Disabling the provider requires a separate fixed-instance
+lifecycle/routing implementation; simply adding Sahara Pods is insufficient.

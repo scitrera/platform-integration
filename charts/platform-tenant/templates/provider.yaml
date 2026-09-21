@@ -1,5 +1,8 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 {{- if ge (int .Values.phase) 4 }}
+{{- if not (regexMatch "(^|/)(sahara|agent-harness)([:@]|$)" .Values.images.sahara) }}
+{{- fail "images.sahara repository basename must be sahara or agent-harness; tags do not select the runtime" }}
+{{- end }}
 apiVersion: apps/v1
 kind: Deployment
 metadata:

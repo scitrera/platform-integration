@@ -121,6 +121,8 @@ def _images(bindings, names, production):
             raise ConfigError("Missing image binding: " + name)
         if production and not re.fullmatch(r"\S+@sha256:[a-f0-9]{64}", image):
             raise ConfigError("Production image binding requires a registry digest: " + name)
+        if name == "sahara" and not re.search(r"(^|/)(sahara|agent-harness)(?=[:@]|$)", image):
+            raise ConfigError("Sahara image repository basename must be sahara or agent-harness; tags do not select the runtime")
         images[name] = image
     return images
 
