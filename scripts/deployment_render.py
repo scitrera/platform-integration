@@ -217,7 +217,7 @@ def helm(resolved):
         upstream = urlsplit(s3["endpoint"])
         sv["uploadProxy"] = {"enabled": True, "endpoint": s3["endpoint"], "signedHost": upstream.netloc}
         st["uploadProxy"] = copy.deepcopy(sv["uploadProxy"])
-        tv["blobUploadBaseURL"] = origin + "/storage/" + tenant + "/uploads/"
+        tv["blobUploadBaseURL"] = tv["blobFetchBaseURL"].rstrip("/") + "/uploads/"
     tv["roleEnvironment"] = {"bridge": {"SANDBOX_BLOB_FETCH_BASE_URL": tv["blobFetchBaseURL"]}}
     if config["billing"]["mode"] != "off":
         metering = bindings.get("metering", {})

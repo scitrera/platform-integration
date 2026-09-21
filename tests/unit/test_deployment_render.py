@@ -215,6 +215,19 @@ class DeploymentRenderTests(unittest.TestCase):
                 self.assertEqual(address.hostname, "example-storage-" + role + ".tenant-example.svc")
                 self.assertEqual(address.port, port)
                 self.assertIn(address.hostname.split(".")[0], services)
+        # Server uploads use the private proxy. The browser origin requires a
+        # user session and cannot be used by background artifact producers.
+        for component, variable in (("connectors", "DC_BLOBGW_UPLOAD_INTERNAL_URL"),
+                                    ("platform", "SANDBOX_BLOB_UPLOAD_BASE_URL")):
+            deployment = next(obj for obj in objects if obj["kind"] == "Deployment"
+                              and obj["metadata"]["name"].endswith("-" + component))
+            environment = {entry["name"]: entry.get("value") for entry in
+                           deployment["spec"]["template"]["spec"]["containers"][0]["env"]}
+            upload = urlsplit(environment[variable])
+            self.assertEqual(upload.hostname, "example-storage-download.tenant-example.svc.cluster.local")
+            self.assertEqual(upload.port, 8080)
+            self.assertEqual(upload.path, "/uploads/")
+            self.assertIn(upload.hostname.split(".")[0], services)
         provider = next(obj for obj in objects if obj["kind"] == "Deployment" and obj["metadata"]["name"].endswith("-provider"))
         env = {v["name"]: v.get("value") for v in provider["spec"]["template"]["spec"]["containers"][0]["env"]}
         self.assertIn("SANDBOX_BLOB_FETCH_BASE_URL", env)
