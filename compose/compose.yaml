@@ -1269,12 +1269,8 @@ services:
       SPARKROUTE_RUNTIME_POSTGRES_AUTO_MIGRATE: 'false'
       SPARKROUTE_CALLER_AUTH_MODE: bearer
       SPARKROUTE_CALLER_AUTH_CONFIG_REF: file:///run/gateway/callers.json
-      SPARKROUTE_CALLER_AUTH_HEADERS: "{\n  \"tenant\": [\"X-Scitrera-Tenant\"],\n\
-        \  \"user\": [\"X-Scitrera-User\"],\n  \"source\": [\"X-Scitrera-Source\"\
-        ],\n  \"workspace\": [\"X-Scitrera-Workspace\"],\n  \"thread_id\": [\"X-Scitrera-Thread-Id\"\
-        ],\n  \"task_id\": [\"X-Scitrera-Task-Id\"],\n  \"experiment\": [\"X-Scitrera-Experiment\"\
-        ],\n  \"session\": [\"X-Scitrera-Session\"],\n  \"mlflow_experiment_id\":\
-        \ [\"X-MLflow-Experiment-Id\"]\n}"
+      SPARKROUTE_CALLER_AUTH_HEADERS: >-
+        {"tenant":["X-SparkRoute-Tenant","X-Scitrera-Tenant"],"user":["X-SparkRoute-User","X-Scitrera-User"],"source":["X-SparkRoute-Source","X-Scitrera-Source"],"workspace":["X-SparkRoute-Workspace","X-Scitrera-Workspace"],"thread_id":["X-SparkRoute-Thread-Id","X-Scitrera-Thread-Id"],"task_id":["X-SparkRoute-Task-Id","X-Scitrera-Task-Id"],"experiment":["X-SparkRoute-Experiment","X-Scitrera-Experiment"],"session":["X-SparkRoute-Session","X-Scitrera-Session"],"mlflow_experiment_id":["X-MLflow-Experiment-Id"],"agent":["X-SparkRoute-Agent"]}
       SPARKROUTE_CREDENTIAL_FILE_ROOTS: /run/gateway
       SPARKROUTE_MODEL_CATALOG_KIND: aether
       SPARKROUTE_MODEL_CATALOG_SOURCE_ID: tenant-aether

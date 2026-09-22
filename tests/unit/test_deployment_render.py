@@ -85,6 +85,24 @@ class DeploymentRenderTests(unittest.TestCase):
         self.assertIn("/tls/metrics-bridge:/run/tls:ro", bridge["volumes"][0])
         self.assertIn("ocr_pages", policy["environment"]["BILLING_USAGE_METER_SLUGS"])
 
+    def test_gateway_attribution_policy_matches_in_compose_and_helm(self):
+        resolved = self.resolved()
+        expected = json.loads((ROOT / "examples/gateway/caller-headers.json").read_text())
+        docker = compose(resolved)["compose.yaml"]["services"]["gateway"]["environment"]
+        self.assertEqual(json.loads(docker["SPARKROUTE_CALLER_AUTH_HEADERS"]), expected)
+        values = helm(resolved)["helm/serving.yaml"]
+        path = self.root / "gateway-values.yaml"
+        path.write_text(yaml.safe_dump(values))
+        raw = subprocess.check_output(["helm", "template", "serving", str(ROOT / "charts/platform-shared"),
+            "-f", str(path), "--kube-version", "1.36.0"], text=True)
+        deployment = next(o for o in yaml.safe_load_all(raw) if o and o["kind"] == "Deployment"
+                          and o["metadata"]["name"] == "serving-gateway")
+        env = {e["name"]: e.get("value") for e in deployment["spec"]["template"]["spec"]["containers"][0]["env"]}
+        self.assertEqual(json.loads(env["SPARKROUTE_CALLER_AUTH_HEADERS"]), expected)
+        self.assertEqual(expected["agent"], ["X-SparkRoute-Agent"])
+        for name in ("user", "workspace"):
+            self.assertEqual(len(expected[name]), 2)
+
     def test_usage_attribution_boundary_is_identical_in_compose_and_helm(self):
         boundary = "2026-09-20T12:34:56Z"
         self.fixture.config["billing"]["attributionFrom"] = boundary
