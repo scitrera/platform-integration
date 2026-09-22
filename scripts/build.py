@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Build selected component snapshots locally and record image IDs; never publish."""
 import argparse
+from datetime import datetime, timezone
 import hashlib
 import json
 import os
@@ -90,11 +91,13 @@ def main():
         source,provenance=snapshots[name]
         revision=provenance['revision']+('-dirty' if provenance['dirty'] else '')
         tag='platform-integration/'+key.lower().replace('_image','')+':'+provenance['tracked_content_sha256'][:16]
+        built_at=datetime.now(timezone.utc).isoformat().replace('+00:00','Z')
         if key=='WEB_IMAGE':
             env=os.environ.copy()
             for item in list(env):
                 if item.startswith('VITE_'): env.pop(item)
             env['BUILD_REVISION']=revision
+            env['BUILD_TIMESTAMP']=built_at
             for folder in ['vendor/messaging-spec/typescript','web']:
                 run(['npm','ci','--prefix',str(source/folder)],env=env)
                 run(['npm','run','build','--prefix',str(source/folder)],env=env)
@@ -102,7 +105,7 @@ def main():
             run(['docker','build','--build-arg','NGINX_IMAGE='+NGINX,'-f',str(ROOT/'images/web/Dockerfile'),
                  '-t',tag,str(source/'web/dist')])
         else:
-            dependency_args=[]
+            dependency_args=['--build-arg','BUILD_TIMESTAMP='+built_at] if key=='BACKEND_IMAGE' else []
             if key=='SAHARA_IMAGE':
                 # The installed web profile consumes current-window live tools.
                 dependency_args=['--build-arg','SAHARA_BRIDGE_TOOLS_AUTODISCOVER=true']
@@ -128,7 +131,7 @@ def main():
             versioned=tag.rsplit(':',1)[0]+':'+match.group(1)+'-'+provenance['tracked_content_sha256'][:16]
             run(['docker','tag',tag,versioned])
             tag=versioned
-        records[key]={'tag':tag,'provenance':provenance}
+        records[key]={'tag':tag,'provenance':provenance,'built_at':built_at}
         if key=='SAHARA_IMAGE':records[key]['build_args']={'SAHARA_BRIDGE_TOOLS_AUTODISCOVER':'true'}
         if key=='SIDECAR_IMAGE':records[key]['dependency_images']={'aether':output(['docker','image','inspect','--format','{{.Id}}',records['AETHER_IMAGE']['tag']])}
         if key=='CODE_IMAGE':records[key]['dependency_images']={'code_base':output(['docker','image','inspect','--format','{{.Id}}',records['CODE_BASE_IMAGE']['tag']])}
