@@ -137,6 +137,7 @@ roleEnvironment: {}
 taskFilesSize: 4Gi
 
 usageReporting:
+  attributionFrom: "" # Set once during coordinated collector cutover; retain on restart.
   enabled: false
   endpoint: ""
   credentialSecret: ""

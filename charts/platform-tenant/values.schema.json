@@ -469,6 +469,10 @@
         },
         "databaseCluster": {
           "type": "string"
+        },
+        "attributionFrom": {
+          "type": "string",
+          "description": "Stable UTC/offset timestamp separating legacy and enriched usage event payloads."
         }
       }
     },

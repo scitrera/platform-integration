@@ -77,3 +77,9 @@ def test_metrics_bridge_ingress_is_namespace_and_component_scoped():
     meters = {m["slug"]: m for m in openmeter_config()["meters"]}
     assert meters["active_users"]["aggregation"] == "UNIQUE_COUNT"
     assert meters["licensed_users"]["eventType"] == "licensed_users"
+
+def test_usage_meters_preserve_model_workspace_agent_and_user_dimensions():
+    for meter in openmeter_config()["meters"]:
+        if meter["aggregation"] == "SUM" and meter["slug"] != "licensed_users":
+            assert meter["groupBy"] == {key: "$." + key for key in
+                ("model", "provider", "workspace", "user", "agent", "kind")}

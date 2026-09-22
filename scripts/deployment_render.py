@@ -233,6 +233,8 @@ def helm(resolved):
         tv["usageReporting"] = {"enabled": True, "endpoint": metering["endpoint"],
             "credentialSecret": metering["credentialSecret"], "namespace": shared,
             "databaseCluster": tenant + "-postgres-db" if consolidated else serving + "-gateway-db"}
+        if config["billing"].get("attributionFrom"):
+            tv["usageReporting"]["attributionFrom"] = config["billing"]["attributionFrom"]
     results = {"helm/serving.yaml": sv, "helm/tenant.yaml": tv, "helm/storage.yaml": st,
                "models.catalog.json": models["records"], "work-profiles.json": profiles,
                "credential-references.json": {"models": {"file": models["credential_file"], "sources": models["credential_sources"]}},

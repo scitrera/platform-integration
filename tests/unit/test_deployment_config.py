@@ -48,6 +48,14 @@ class DeploymentConfigTests(unittest.TestCase):
             binding_path.write_text(yaml.safe_dump(bindings))
         return resolve(path, profile="production", bindings_path=binding_path)
 
+    def test_usage_attribution_boundary_requires_a_stable_zoned_timestamp(self):
+        for bad in ("", "2026-09-20", "tomorrow", True, 42):
+            self.config["billing"]["attributionFrom"] = bad
+            with self.subTest(value=bad), self.assertRaisesRegex(ConfigError, "attributionFrom"):
+                self.run_config()
+        self.config["billing"]["attributionFrom"] = "2026-09-20T00:00:00Z"
+        self.assertEqual(self.run_config(), self.run_config())
+
     def test_deterministic_without_reading_secrets(self):
         first = self.run_config()
         (self.root / "models.env").write_text("PRIVATE=never-render-this")

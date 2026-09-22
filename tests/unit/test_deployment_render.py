@@ -85,6 +85,23 @@ class DeploymentRenderTests(unittest.TestCase):
         self.assertIn("/tls/metrics-bridge:/run/tls:ro", bridge["volumes"][0])
         self.assertIn("ocr_pages", policy["environment"]["BILLING_USAGE_METER_SLUGS"])
 
+    def test_usage_attribution_boundary_is_identical_in_compose_and_helm(self):
+        boundary = "2026-09-20T12:34:56Z"
+        self.fixture.config["billing"]["attributionFrom"] = boundary
+        resolved = self.resolved()
+        self.assertEqual(compose(resolved)["compose.yaml"]["services"]["usage-collector-example"]
+                         ["environment"]["BILLING_USAGE_ATTRIBUTION_FROM"], boundary)
+        values = helm(resolved)["helm/tenant.yaml"]
+        self.assertEqual(values["usageReporting"]["attributionFrom"], boundary)
+        path = self.root / "usage-values.yaml"
+        path.write_text(yaml.safe_dump(values))
+        raw = subprocess.check_output(["helm", "template", "example", str(ROOT / "charts/platform-tenant"),
+            "-f", str(path), "--kube-version", "1.36.0"], text=True)
+        deployment = next(o for o in yaml.safe_load_all(raw) if o and o["kind"] == "Deployment"
+                          and o["metadata"]["name"] == "example-usage-collector")
+        env = deployment["spec"]["template"]["spec"]["containers"][0]["env"]
+        self.assertIn({"name": "BILLING_USAGE_ATTRIBUTION_FROM", "value": boundary}, env)
+
     def test_browser_session_ttl_reaches_compose_and_helm(self):
         self.fixture.config["auth"].update(mode="local", sessionTTL="8h")
         resolved = self.resolved()

@@ -1,11 +1,40 @@
 {
-  "tenant": ["X-Scitrera-Tenant"],
-  "user": ["X-Scitrera-User"],
-  "source": ["X-Scitrera-Source"],
-  "workspace": ["X-Scitrera-Workspace"],
-  "thread_id": ["X-Scitrera-Thread-Id"],
-  "task_id": ["X-Scitrera-Task-Id"],
-  "experiment": ["X-Scitrera-Experiment"],
-  "session": ["X-Scitrera-Session"],
-  "mlflow_experiment_id": ["X-MLflow-Experiment-Id"]
+  "tenant": [
+    "X-SparkRoute-Tenant",
+    "X-Scitrera-Tenant"
+  ],
+  "user": [
+    "X-SparkRoute-User",
+    "X-Scitrera-User"
+  ],
+  "source": [
+    "X-SparkRoute-Source",
+    "X-Scitrera-Source"
+  ],
+  "workspace": [
+    "X-SparkRoute-Workspace",
+    "X-Scitrera-Workspace"
+  ],
+  "thread_id": [
+    "X-SparkRoute-Thread-Id",
+    "X-Scitrera-Thread-Id"
+  ],
+  "task_id": [
+    "X-SparkRoute-Task-Id",
+    "X-Scitrera-Task-Id"
+  ],
+  "experiment": [
+    "X-SparkRoute-Experiment",
+    "X-Scitrera-Experiment"
+  ],
+  "session": [
+    "X-SparkRoute-Session",
+    "X-Scitrera-Session"
+  ],
+  "mlflow_experiment_id": [
+    "X-MLflow-Experiment-Id"
+  ],
+  "agent": [
+    "X-SparkRoute-Agent"
+  ]
 }

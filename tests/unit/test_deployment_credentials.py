@@ -21,6 +21,11 @@ class DeploymentCredentialTests(test_deployment_render.DeploymentRenderTests):
         docs = {d['metadata']['name']:d for d in tenant_secrets(resolved,identity,tls,env)}
         gateway = docs['gateway-files']['stringData']
         self.assertIn('models-example-secrets.json',gateway)
+        callers = json.loads(gateway['callers.json'])['clients']
+        platform = next(c for c in callers if c['subject'] == 'platform-server')
+        self.assertIn('agent', platform['allowed_attribution'])
+        memory = next(c for c in callers if c['subject'] == 'memorylayer')
+        self.assertNotIn('agent', memory['allowed_attribution'])
         self.assertEqual(json.loads(gateway['models-example-secrets.json']),{'review-api_key_env':'synthetic-model-key'})
         self.assertIn('aether-sparkroute-creds-example',docs)
         self.assertNotIn('synthetic-model-key',gateway['config.json'])

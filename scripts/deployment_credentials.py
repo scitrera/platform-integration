@@ -148,7 +148,7 @@ def tenant_secrets(resolved, identity, tls, env):
     secret('gateway-token', {'token': identity['gatewayToken']})
     secret('gateway-env', {'SPARKROUTE_POSTGRES_URL': urls['sparkroute'], 'SPARKROUTE_RUNTIME_POSTGRES_URL': urls['sparkroute']})
     clients = []
-    for subject, token_key, allowed in [('platform-server','gatewayToken',['user','source','workspace','thread_id','task_id']),
+    for subject, token_key, allowed in [('platform-server','gatewayToken',['user','source','workspace','thread_id','task_id','agent']),
                                        ('memorylayer','memorylayerGatewayToken',['source','task_id'])]:
         clients.append({'id': subject+'-'+tenant, 'type': 'service', 'tenant': tenant, 'subject': subject,
             'token_sha256': hashlib.sha256(identity[token_key].encode()).hexdigest(), 'allowed_attribution': allowed,

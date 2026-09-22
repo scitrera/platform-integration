@@ -232,8 +232,16 @@ def _validate(config):
         raise ConfigError("Invalid backup retention")
     if not isinstance(config["backup"]["schedule"], str) or len(config["backup"]["schedule"].split()) != 5:
         raise ConfigError("Backup schedule must use five-field cron; renderers adapt runtime syntax")
-    _fields(config["billing"], {"mode", "rateCard"}, "billing", {"mode"})
+    _fields(config["billing"], {"mode", "rateCard", "attributionFrom"}, "billing", {"mode"})
     _choice(config["billing"]["mode"], {"off", "reporting", "pricing"}, "billing.mode")
+    if "attributionFrom" in config["billing"]:
+        from datetime import datetime
+        value = config["billing"]["attributionFrom"]
+        try:
+            if not isinstance(value, str) or datetime.fromisoformat(value.replace("Z", "+00:00")).tzinfo is None:
+                raise ValueError()
+        except ValueError:
+            raise ConfigError("billing.attributionFrom requires an ISO timestamp with timezone") from None
     if config["billing"]["mode"] == "pricing" and not config["billing"].get("rateCard"):
         raise ConfigError("Pricing requires a rateCard reference")
     _fields(config["objectStorage"], {"mode"}, "objectStorage", {"mode"})

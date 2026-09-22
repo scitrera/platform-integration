@@ -34,6 +34,9 @@ spec:
         env:
         - {name: BILLING_TENANT, value: {{ .Values.tenant | quote }}}
         - {name: BILLING_REPORTING_URL, value: {{ required "usageReporting.endpoint required" .Values.usageReporting.endpoint | quote }}}
+{{- if .Values.usageReporting.attributionFrom }}
+        - {name: BILLING_USAGE_ATTRIBUTION_FROM, value: {{ .Values.usageReporting.attributionFrom | quote }}}
+{{- end }}
         envFrom:
         - secretRef: {name: {{ required "usageReporting.credentialSecret required" .Values.usageReporting.credentialSecret | quote }}}
         volumeMounts:

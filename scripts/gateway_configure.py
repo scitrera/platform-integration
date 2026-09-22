@@ -25,7 +25,7 @@ def main():
         create(path,secrets.token_urlsafe(32)+'\n')
         clients.append({'id':'platform-'+slug,'type':'service','tenant':slug,
             'subject':'platform-server','token_sha256':hashlib.sha256(path.read_text().strip().encode()).hexdigest(),
-            'allowed_attribution':['user','source','workspace','thread_id','task_id'],
+            'allowed_attribution':['user','source','workspace','thread_id','task_id','agent'],
             'fixed_attribution':{'source':'sahara'}})
         ml_path=ROOT/'.local'/slug/'memorylayer-gateway-token'
         create(ml_path,secrets.token_urlsafe(32)+'\n')

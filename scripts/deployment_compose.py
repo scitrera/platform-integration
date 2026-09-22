@@ -227,6 +227,8 @@ def build(resolved, policy, resources):
             "env_file": [{"path": env("PLATFORM_CONFIG_ROOT") + "/" + config.get("secretFiles", {}).get("billing", "billing.env"), "required": True}],
             "depends_on": {"gateway": {"condition": "service_started"}},
         }
+        if config["billing"].get("attributionFrom"):
+            services["usage-collector-" + tenant]["environment"]["BILLING_USAGE_ATTRIBUTION_FROM"] = config["billing"]["attributionFrom"]
         if metering.get("networkName"):
             document["networks"]["billing"] = {"external": True, "name": metering["networkName"]}
             services["usage-collector-" + tenant]["networks"].append("billing")

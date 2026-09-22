@@ -191,3 +191,28 @@ removing only the tenant upload-route prefix. Do not use NGINX `rewrite` on thes
 paths: it decodes reserved filename characters and can invalidate the S3
 signature. The fixed upstream Host, tenant authentication, PUT-only policy and
 512 MiB application body limit still apply.
+
+### Usage attribution cutover
+
+Set billing.attributionFrom in the customer deployment policy to a stable,
+timezone-qualified ISO timestamp. Compose and Helm both pass it as
+BILLING_USAGE_ATTRIBUTION_FROM to the gateway collector. Leave it unset while
+preparing an upgrade to an existing journal; pause old collectors before
+choosing and persisting the boundary. A fresh empty journal can use the Unix
+epoch. Keep this value unchanged across subsequent renders and restarts.
+
+The enriched format groups LLM usage by requested alias (kind), actual served
+model/provider, workspace, user and agent/work profile. Upgrade the shared
+reporting backend first so it accepts agent and normalization_version; update
+the gateway image, caller policy and compatibility header file before enabling
+agent headers on the application. Update OpenMeter's groupBy definitions and
+restart its API/sink and the metrics bridge to refresh discovered dimensions.
+Verify the selected OpenMeter version supports the groupBy update in a
+disposable installation before applying it to retained production data.
+Do not recreate production meters or replay old events with new IDs to hide a
+migration error. Old usage stays in its original categories until a separately
+reconciled historical rebuild. See the backend usage-reporting guide.
+
+Gateway compatibility headers accept both X-SparkRoute-* and the existing
+X-Scitrera-* names. Only explicitly permitted service principals may supply
+agent; MemoryLayer's existing caller permissions are unchanged.

@@ -46,7 +46,7 @@ def openmeter_config():
         # Omitting Svix yields the upstream no-op webhook handler. No notification,
         # balance or billing worker is started by the reporting installation.
         "meters": [{"slug": name, "eventType": name, "aggregation": "SUM", "valueProperty": "$.qty",
-                    "groupBy": {key: "$." + key for key in ("model", "provider", "workspace", "kind")}}
+                    "groupBy": {key: "$." + key for key in ("model", "provider", "workspace", "user", "agent", "kind")}}
                    for name in METERS] + [
             {"slug": "active_users", "eventType": "active_user_ping", "aggregation": "UNIQUE_COUNT",
              "valueProperty": "$.user", "groupBy": {"workspace": "$.workspace"}},
