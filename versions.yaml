@@ -39,13 +39,14 @@ verification_scope:
     new Kubernetes runtime acceptance not performed
 images:
   BACKEND_IMAGE:
-    tag: platform-integration/backend:2f044940ff5ab143
-    local_image_id: sha256:2b18bf591e8595b298928f0953d1702f43dc4d5428c75087e3c3a4d60328280c
+    tag: platform-integration/backend:77743d21b0bccfc9
+    local_image_id: sha256:287c327d70f7c0467ad1ff6b3ebd5afc59c2171e7156f67fd6af087cc96cc894
     os: linux
     architecture: arm64
     registry_manifest_digests: []
-    availability: Verified local image; private deployment publication recorded separately
-    source_set: platform-backend-2f044940ff5ab143
+    availability: Verified clean local image; private deployment publication recorded
+      separately
+    source_set: platform-backend-77743d21b0bccfc9
   SAHARA_IMAGE:
     tag: platform-integration/sahara:2f044940ff5ab143
     local_image_id: sha256:50baefe7804859919d7bb144e10ae3ab64b678e11c6318588af7b0d17b3d3571
@@ -109,14 +110,14 @@ images:
     availability: verified in local Docker engine; registry publication not established
     source_set: platform-backend-60dece1d39c0b694
   MEMORYLAYER_IMAGE:
-    tag: platform-integration/memorylayer:763e31b712078b6e
-    local_image_id: sha256:337c9980ece288aef7045ff1d79014a2b4637445bcc325194e0233808214aa8f
+    tag: platform-integration/memorylayer:0cc1d73b6ca16cb2
+    local_image_id: sha256:0de15999d5e1c72af8e0fa94d1271972e03c4531e3a1503618ff9cb1f984a9c2
     os: linux
     architecture: arm64
     registry_manifest_digests: []
     availability: Verified clean local image; private deployment publication recorded
       separately
-    source_set: memorylayer-enterprise-763e31b712078b6e
+    source_set: memorylayer-enterprise-0cc1d73b6ca16cb2
   CONNECTORS_IMAGE:
     tag: platform-integration/connectors:9b4843491c4b4e4f
     local_image_id: sha256:f9a2f04c864ab4f916838f54f8b16ea13bbdfe3261b766d143be8d195284ccf7
@@ -540,6 +541,22 @@ source_sets:
     repository: https://github.com/scitrera/memorylayer-enterprise
     revision: ab0d27f341d4541927b6588eac425557ac518f73
     tracked_content_sha256: 763e31b712078b6ec182c3cade59deaf29aa0d3b47ac07f4eb470ee83316c4bf
+    dirty: false
+    include_untracked: []
+    availability: Published main
+  platform-backend-77743d21b0bccfc9:
+    component: platform-backend
+    repository: https://github.com/scitrera/platform-backend
+    revision: e1a312a5c879bd53810f64e74e7a554ab475e8a8
+    tracked_content_sha256: 77743d21b0bccfc9ff07fd9af81d91c1aea6267deadd0954ac4c162faf9e8adf
+    dirty: false
+    include_untracked: []
+    availability: Local main; publication pending
+  memorylayer-enterprise-0cc1d73b6ca16cb2:
+    component: memorylayer-enterprise
+    repository: https://github.com/scitrera/memorylayer-enterprise
+    revision: e352b894468e72d087d21f8b4880184caaf56273
+    tracked_content_sha256: 0cc1d73b6ca16cb24c6636b661a77d882dfc65688be94bc83d4f9574f0ce9762
     dirty: false
     include_untracked: []
     availability: Published main
