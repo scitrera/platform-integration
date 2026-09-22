@@ -109,13 +109,14 @@ images:
     availability: verified in local Docker engine; registry publication not established
     source_set: platform-backend-60dece1d39c0b694
   MEMORYLAYER_IMAGE:
-    tag: platform-integration/memorylayer:84d4fd835dafe9fa
-    local_image_id: sha256:055796353e46c54c521ce7f5be966258af91e279fe7ccbf1be6a282e82203abf
+    tag: platform-integration/memorylayer:763e31b712078b6e
+    local_image_id: sha256:337c9980ece288aef7045ff1d79014a2b4637445bcc325194e0233808214aa8f
     os: linux
     architecture: arm64
     registry_manifest_digests: []
-    availability: Verified local image; private deployment publication recorded separately
-    source_set: memorylayer-enterprise-84d4fd835dafe9fa
+    availability: Verified clean local image; private deployment publication recorded
+      separately
+    source_set: memorylayer-enterprise-763e31b712078b6e
   CONNECTORS_IMAGE:
     tag: platform-integration/connectors:9b4843491c4b4e4f
     local_image_id: sha256:f9a2f04c864ab4f916838f54f8b16ea13bbdfe3261b766d143be8d195284ccf7
@@ -165,13 +166,14 @@ images:
     availability: Verified local image; private deployment publication recorded separately
     source_set: auth-go-3d353c4f83ecfd53
   WEB_IMAGE:
-    tag: platform-integration/web:0cf28c072fe5ef15
-    local_image_id: sha256:5000881e6dac89fb63d4c6221b2797a26eba645842d43298b7503b0c8b930bee
+    tag: platform-integration/web:158c7b14d24c4540
+    local_image_id: sha256:3da3aff29ef23a300df75ba0a4977de9f495d27637fdba216311d5e5db12f35e
     os: linux
     architecture: arm64
     registry_manifest_digests: []
-    availability: Verified local image; private deployment publication recorded separately
-    source_set: platform-frontend-0cf28c072fe5ef15
+    availability: Verified clean local image; private deployment publication recorded
+      separately
+    source_set: platform-frontend-158c7b14d24c4540
   AETHER_IMAGE:
     tag: platform-integration/aether:f67b7e8fc69a1c62
     local_image_id: sha256:7b133bfe4d8dcb538d3996fe957b9b50a771248e183680470e3a781690973526
@@ -523,7 +525,24 @@ source_sets:
     tracked_content_sha256: f67b7e8fc69a1c6219ce0953001844aab9b902b3fd3671f9ea5d0f1e03ccc695
     dirty: false
     include_untracked: []
-    availability: Tested image source published in https://github.com/scitrera/aether/pull/11 (unmerged); PR head also includes an error-message lint cleanup
+    availability: 'PR #11 merged as 03ef1d58; this image retains tested 46bf4c5 source.
+      Later changes only correct baseline lint errors.'
+  platform-frontend-158c7b14d24c4540:
+    component: platform-frontend
+    repository: https://github.com/scitrera/platform-frontend
+    revision: f57134677175c6ac32d6fad7230d5c2e287bb4f6
+    tracked_content_sha256: 158c7b14d24c4540bdcf5e8fa1cc99448ec69940b64b3aa02cbe975c111537d0
+    dirty: false
+    include_untracked: []
+    availability: Local main; publication pending
+  memorylayer-enterprise-763e31b712078b6e:
+    component: memorylayer-enterprise
+    repository: https://github.com/scitrera/memorylayer-enterprise
+    revision: ab0d27f341d4541927b6588eac425557ac518f73
+    tracked_content_sha256: 763e31b712078b6ec182c3cade59deaf29aa0d3b47ac07f4eb470ee83316c4bf
+    dirty: false
+    include_untracked: []
+    availability: Published main
 upstream_changes:
   sahara-oss:
     pull_request: https://github.com/scitrera/agent-harness-go/pull/1
@@ -531,6 +550,8 @@ upstream_changes:
   aether:
     pull_request: https://github.com/scitrera/aether/pull/10
     status: merged to main; bounded replay/KV reads and default 1 GiB Go memory budget
+    retry_pull_request: https://github.com/scitrera/aether/pull/11
+    retry_status: merged to main as 03ef1d58d9c207e1324b22fef3fd29255049c6f2
   memorylayer-enterprise:
     pull_request: https://github.com/scitrera/memorylayer-enterprise/pull/2
     status: draft; not merged

@@ -32,8 +32,12 @@ class Handler(BaseHTTPRequestHandler):
  def do_GET(self):
   if self.path.startswith('/auth/verify'):
    cookie=self.headers.get('Cookie','')
+   assert self.headers.get('X-Blob-Capability') is None
+   assert self.headers.get('Authorization') != 'Bearer synthetic-valid-ticket'
    status=200 if cookie=='synthetic=allowed' else (403 if cookie=='synthetic=wrong-tenant' else 401)
-   self.send_response(status);self.end_headers();return
+   self.send_response(status);self.send_header('X-Scitrera-User','synthetic-reader');self.end_headers();return
+  if self.path.startswith('/blob/'):
+   self.send_response(200);self.end_headers();self.wfile.write(json.dumps({'target':self.path,'identity':self.headers.get('X-Scitrera-User'),'tenant':self.headers.get('X-Auth-Tenant-ID'),'authorization':self.headers.get('Authorization')}).encode());return
   self.send_response(404);self.end_headers()
  def do_PUT(self):
   data=self.rfile.read(int(self.headers.get('Content-Length','0')))
@@ -42,7 +46,7 @@ class Handler(BaseHTTPRequestHandler):
           'cookie':self.headers.get('Cookie'),'authorization':self.headers.get('Authorization'),
           'identity':self.headers.get('X-Scitrera-User')}
   self.send_response(200);self.end_headers();self.wfile.write(json.dumps(result).encode())
-for port in (8080,8081,9000):
+for port in (8080,8081,8090,9000):
  server=ThreadingHTTPServer(('0.0.0.0',port),Handler)
  threading.Thread(target=server.serve_forever,daemon=True).start()
 while True: time.sleep(60)
@@ -96,7 +100,7 @@ def main():
                 '--memory', '128m', '--cpus', '0.5', '--read-only', '--cap-drop', 'ALL',
                 '--security-opt', 'no-new-privileges:true', *flags, image, *command)
             return name
-        container('fixture', args.python_image, ['--network-alias', 'auth', '--network-alias', 'objects',
+        container('fixture', args.python_image, ['--network-alias', 'auth', '--network-alias', 'objects', '--network-alias', 'storage-edge', '--network-alias', 'example-storage-edge.tenant-example.svc.cluster.local',
             '--entrypoint', 'python', '-v', str(fixture.root / 'fixture.py') + ':/fixture.py:ro'], ['-B', '/fixture.py'])
         payload = b'Synthetic upload transport verification.\n'
         digest = hashlib.sha256(payload).hexdigest()
@@ -111,11 +115,11 @@ def main():
                 '--tmpfs', '/var/run:size=4m,uid=1000,gid=1000', '--entrypoint', 'nginx',
                 '-v', str(conf) + ':/etc/nginx/nginx.conf:ro'], ['-g', 'daemon off;'])
             port = run('docker', 'port', web, '8080/tcp').rsplit(':', 1)[1]
-            def request(path, cookie='synthetic=allowed', method='PUT'):
+            def request(path, cookie='synthetic=allowed', method='PUT', capability=''):
                 req = urllib.request.Request('http://127.0.0.1:' + port + path, method=method,
                     data=payload if method=='PUT' else None,
                     headers={'Cookie': cookie, 'Content-Type': 'application/pdf',
-                             'Authorization': 'Bearer synthetic', 'X-Scitrera-User': 'forged'})
+                             'Authorization': 'Bearer synthetic', 'X-Scitrera-User': 'forged', 'X-Blob-Capability': capability})
                 try: response = urllib.request.urlopen(req, timeout=5)
                 except urllib.error.HTTPError as error: response = error
                 with response: return response.status, response.read()
@@ -126,6 +130,21 @@ def main():
                 except OSError: pass
                 if time.monotonic() > deadline: raise RuntimeError('NGINX startup failed: ' + profile)
                 time.sleep(.2)
+            path = '/blob/data/blobs/test/pages/page_0000.png?cap=synthetic-valid-ticket'
+            status, body = request('/storage/example' + path, method='GET')
+            assert status == 200, (profile, 'page fetch', status, body)
+            got = json.loads(body)
+            assert got == {'target':path,'identity':'synthetic-reader','tenant':'example','authorization':None}, got
+            results.append({'profile':profile,'case':'page-query-capability','status':status})
+            bare = path.split('?')[0]
+            status, body = request('/storage/example'+bare, method='GET', capability='synthetic-valid-ticket')
+            assert status == 200
+            assert json.loads(body) == {'target':bare,'identity':'synthetic-reader','tenant':'example','authorization':'Bearer synthetic-valid-ticket'}
+            results.append({'profile':profile,'case':'page-header-capability','status':status})
+            for cookie, expected in [('',401),('synthetic=wrong-tenant',403)]:
+                status,_ = request('/storage/example'+bare, cookie=cookie, method='GET', capability='synthetic-valid-ticket')
+                assert status == expected
+                results.append({'profile':profile,'case':'page-header-denied','status':status})
             for name in names:
                 target = '/synthetic-bucket/staging/' + urllib.parse.quote(name, safe='') + '/up-01%3A02%3A03' + query
                 status, body = request(prefix + target)

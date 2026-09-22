@@ -35,3 +35,20 @@ In Compose, blobgw's S3 backend is the local MinIO `objects` service, persisted
 in a Docker volume; its index is in PostgreSQL. A production S3 endpoint can be
 configured separately. Changing the document blob provider does not itself move
 data off the deployment machine or change the tenant's backing S3 credentials.
+
+## Preview transport and browser reuse
+
+Current Analysis Mode fetches same-origin page bytes with `X-Blob-Capability`
+and removes `cap` from the URL. Deploy the matching serving-proxy configuration
+with this frontend: after auth-go verifies tenant membership, the storage route
+maps that header to edge `Authorization: Bearer`. The login subrequest never
+uses the object capability. Existing query links remain compatible. Caller user
+and tenant headers are still replaced by checked identity; anonymous and
+wrong-tenant requests fail before storage access.
+
+The frontend retains at most 16 pages / 32 MiB for five minutes within one open
+review revision. Closing the review clears the cache; nearby image elements use
+revocable object URLs. Failed images are not cached and Retry obtains a fresh
+authorized descriptor. HTTP requests/responses remain `no-store`; no shared CDN
+cache, localStorage or service-worker cache is enabled. Roll back the frontend
+and proxy together if returning to an older integration version.

@@ -67,6 +67,10 @@ http {
   default_type application/octet-stream;
   resolver 127.0.0.11 valid=5s ipv6=off;
   map $http_upgrade $connection_upgrade { default upgrade; '' close; }
+  map $http_x_blob_capability $blob_capability_authorization {
+    default "Bearer $http_x_blob_capability";
+    '' '';
+  }
   access_log off;
   server {
     listen 8080;
@@ -181,6 +185,7 @@ http {
       proxy_pass_request_headers off;
       proxy_set_header X-Auth-Tenant-ID {slug};
       proxy_set_header X-Scitrera-User $storage_user_{variable};
+      proxy_set_header Authorization $blob_capability_authorization;
       proxy_set_header Content-Type $http_content_type;
       proxy_set_header Range $http_range;
       proxy_set_header If-Range $http_if_range;
