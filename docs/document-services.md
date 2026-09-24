@@ -36,11 +36,18 @@ The adapter image is built from `services/embed-proxy/`; its Dockerfile supports
 
 MemoryLayer uses HTTP transport, the `embed_server` embedding and transcription services, timeout 1860s, and one-image batches. It retains original page indexes across split requests. The profile disables neural NER, document chat and visual tokenizer, and does not use Sparkroute for OCR. Ordinary regex extraction remains available. The serving envelope accepts one image up to 2048 pixels on each edge and 4M decoded pixels, eight text inputs within 6144 UTF-8 bytes (3072 for multivector), and 4096 OCR output tokens. Ordinary PDF pages at 150 DPI fit; larger scans require preprocessing.
 
-## Modal application lifecycle and scaling
+## Hosted endpoints
 
-Use the enterprise `deploy/l4/modal_app.py` wrapper for both ephemeral (`modal serve`, for development) and persistent (`modal deploy`, for integration) web endpoints. Independently select `MEMORYLAYER_MODAL_MODE=scale-to-zero` (min 0/max 1) or `always-warm` (min 1/max 1). The production integration should reference a **persistent** endpoint; persistent does not imply an always-running GPU. Both policies use the same proxy authentication and continuation handling. All Modal functions retain default CPU/RAM requests.
+The public enterprise repository provides portable image profiles, cache preparation
+and synthetic checks. Operators deploy those artifacts separately and supply a
+qualified endpoint plus proxy credential references. No private deployment repository
+is required to build or install the public platform.
 
-The synthetic L4 startup measured about 6½ minutes, so always-warm is the recommended interactive production policy if continuous GPU usage is acceptable. Scale-to-zero is useful for occasional workloads that tolerate startup latency. Warm mode cannot eliminate infrastructure restarts. Prepare the model volume before either mode; the enterprise runbook has the full command matrix and measured qualification. No persistent deployment is created by the build/qualification workflow.
+For Modal, use a persistent endpoint for installations. Persistent app lifetime is
+independent of whether idle GPU capacity scales to zero. Select cold-start versus
+warm-capacity policy in the operator deployment; the same public proxy supports
+both. Account-specific wrappers, deployment commands, endpoint assignments and
+qualification records are maintained outside the public component repositories.
 
 ## GPU Docker Compose
 
@@ -69,7 +76,7 @@ Preparation is a CPU-only Job scheduled on the selected storage/GPU node class; 
 
 A model or preprocessing change requires re-embedding even if its dimensions stay the same. This profile pins native vLLM 0.25.0 ColModernVBERT image processing with image splitting disabled and pool factor 1. It is not index-compatible by assumption with tiled Sentence Transformers/ColPali processing; qualify representative visual retrieval before switching. The existing synthetic fixtures remain 1536-dimensional. No active configuration, database or fixture default is changed merely by adding this profile. Plan migration or a new isolated 1920-dimensional database, retain existing data, and validate retrieval/citations before switching traffic.
 
-Publish/review the component source changes and image manifests, then update the consumer lock and image pins together. The serving artifact manifest records actual wheel hashes because unpublished local edits are not represented by an old Git commit. A candidate image is not a production-qualified image. Run the enterprise L4 synthetic qualification, proxy tests, `scripts/check.py`, and a disposable tenant ingest/retrieval acceptance before customer rollout. Source URLs, filenames, tables and figure citations must survive; a successful HTTP status alone is insufficient.
+Publish/review the component source changes and image manifests, then update the consumer lock and image pins together. The serving artifact manifest records actual wheel hashes because unpublished local edits are not represented by an old Git commit. A candidate image is not a production-qualified image. Run the portable L4 synthetic checks and operator GPU qualification, proxy tests, `scripts/check.py`, and a disposable tenant ingest/retrieval acceptance before customer rollout. Source URLs, filenames, tables and figure citations must survive; a successful HTTP status alone is insufficient.
 
 ## Split v2 services (opt-in)
 
