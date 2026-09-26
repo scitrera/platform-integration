@@ -8,3 +8,19 @@
 {{- if ne (empty .Values.authSession.sentinel.master) (empty .Values.authSession.sentinel.addresses) }}
 {{- fail "authSession.sentinel requires both master and addresses" }}
 {{- end }}
+
+{{- if .Values.components.auth }}
+{{- range $origin := (include "platform-shared.authOrigins" . | fromJsonArray) }}
+{{- if not (regexMatch "^https?://[A-Za-z0-9][A-Za-z0-9.-]*(:[0-9]{1,5})?$" $origin) }}
+{{- fail "authSession.allowedOrigins and publicOrigin require exact HTTP(S) origins without wildcards, paths or credentials" }}
+{{- end }}
+{{- if and (not $.Values.development) (not (hasPrefix "https://" $origin)) }}
+{{- fail "production auth session origins must use HTTPS" }}
+{{- end }}
+{{- end }}
+{{- range $host := (include "platform-shared.authHostnames" . | fromJsonArray) }}
+{{- if not (regexMatch "^[a-z0-9]([a-z0-9.-]*[a-z0-9])?$" $host) }}
+{{- fail "authIngress.additionalHostnames and adminOrigin require exact DNS hostnames" }}
+{{- end }}
+{{- end }}
+{{- end }}

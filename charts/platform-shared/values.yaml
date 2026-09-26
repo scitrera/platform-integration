@@ -82,6 +82,8 @@ authSession:
   ttl: 24h
   cookieDomain: ''
   defaultTenant: ''
+  # Exact trusted application origins; publicOrigin is always included.
+  # Used by checkz, Envoy CORS and post-login return URL validation.
   allowedOrigins: []
 ingress:
   enabled: true
@@ -100,6 +102,8 @@ externalAuthNamespace: ''
 authClientNamespaces: []
 
 authIngress:
+  # Additional public auth host aliases, besides the host in adminOrigin.
+  additionalHostnames: []
   enabled: false
   parentName: ''
   parentNamespace: ''

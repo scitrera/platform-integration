@@ -112,13 +112,13 @@ spec:
         - name: SCITRERA_AUTH_ALLOWED_REDIRECT_HOSTS
           value: {{ .Values.hostname | quote }}
         - name: SCITRERA_AUTH_CHECKZ_ALLOWED_ORIGINS
-          value: {{ .Values.publicOrigin | quote }}
+          value: {{ include "platform-shared.authOrigins" . | fromJsonArray | join "," | quote }}
         - name: AUTH_PROXY_SESSION_COOKIE_DOMAIN
           value: {{ .Values.authSession.cookieDomain | quote }}
         - name: SCITRERA_AUTH_LOGIN_DEFAULT_TENANT
           value: {{ .Values.authSession.defaultTenant | quote }}
         - name: SCITRERA_AUTH_ALLOWED_REDIRECT_ORIGINS
-          value: {{ join "," .Values.authSession.allowedOrigins | quote }}
+          value: {{ include "platform-shared.authOrigins" . | fromJsonArray | join "," | quote }}
         - name: AUTH_PROXY_SESSION_COOKIE_SECURE
           value: {{ (not .Values.development) | toString | quote }}
         volumeMounts:

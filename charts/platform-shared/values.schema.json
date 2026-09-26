@@ -406,6 +406,12 @@
         },
         "sectionName": {
           "type": "string"
+        },
+        "additionalHostnames": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
         }
       }
     },

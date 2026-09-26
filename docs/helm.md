@@ -58,6 +58,28 @@ through modelCatalog.records using the native publisher contract in model-catalo
 The operator-supplied SparkRoute composition must include that contract; a local
 private image is not evidence of public distribution availability.
 
+## Shared auth browser origins
+
+Set `platform-shared.authSession.allowedOrigins` to the exact application origins
+that use the shared browser login, including generic frontends and any active
+customer aliases. The canonical `publicOrigin` is always retained. This one list
+feeds auth-go's `/checkz` origin guard, login return URL validation, and Envoy's
+credentialed CORS policy. Production origins require HTTPS; wildcards, URL paths
+and user information are rejected.
+
+With `authIngress.enabled`, a separate route limits CORS to `/checkz` and
+`/auth/checkz`, permitting GET/HEAD/OPTIONS and credentials. Session responses use
+`Cache-Control: no-store` and `Vary: Origin`. No-session responses remain 401 but
+carry CORS headers for trusted origins, so the frontend can recognize signed-out
+users. Other origins remain blocked by auth-go as well as the browser policy.
+No cross-origin access is granted to OAuth callbacks, logout or operator APIs.
+
+`authIngress.additionalHostnames` adds explicit public auth aliases to the host
+from `adminOrigin`. Configure DNS and TLS for these aliases separately. This does
+not change the registered OAuth callback URL or expose the internal verify/admin
+listeners. Origin and alias changes need no new image; applying the chart restarts
+auth only when its environment changes. Session storage and TTL are preserved.
+
 ## Existing Secrets
 
 Create the namespaces and operator-owned Secrets before installing. Never put
