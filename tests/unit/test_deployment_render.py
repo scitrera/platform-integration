@@ -120,6 +120,21 @@ class DeploymentRenderTests(unittest.TestCase):
         env = deployment["spec"]["template"]["spec"]["containers"][0]["env"]
         self.assertIn({"name": "BILLING_USAGE_ATTRIBUTION_FROM", "value": boundary}, env)
 
+    def test_storage_origin_reaches_compose_and_authenticated_profile_backend(self):
+        resolved = self.resolved()
+        origin = resolved["deployment"]["public"]["origin"]
+        self.assertEqual(compose(resolved)["compose.yaml"]["services"]["platform-example"]
+                         ["environment"]["SCITRERA_STORAGE_PUBLIC_ORIGIN"], origin)
+        values = helm(resolved)["helm/tenant.yaml"]
+        path = self.root / "storage-origin.yaml"
+        path.write_text(yaml.safe_dump(values))
+        raw = subprocess.check_output(["helm", "template", "example", str(ROOT / "charts/platform-tenant"),
+            "-f", str(path), "--kube-version", "1.36.0"], text=True)
+        deployment = next(o for o in yaml.safe_load_all(raw) if o and o["kind"] == "Deployment"
+                          and o["metadata"]["name"] == "example-platform")
+        env = deployment["spec"]["template"]["spec"]["containers"][0]["env"]
+        self.assertIn({"name": "SCITRERA_STORAGE_PUBLIC_ORIGIN", "value": origin}, env)
+
     def test_browser_session_ttl_reaches_compose_and_helm(self):
         self.fixture.config["auth"].update(mode="local", sessionTTL="8h")
         resolved = self.resolved()

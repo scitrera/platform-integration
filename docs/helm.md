@@ -243,3 +243,21 @@ expose frontend, storage, auth or other tenant paths on that hostname. The
 normal dedicated-host route is unchanged. Aliases require an existing shared
 Gateway, enabled host authentication, DNS and TLS coverage. Backend allowed
 origins must also include the intended browser frontends.
+
+### Shared frontends and tenant storage
+
+The tenant backend advertises `uiConfig.storageOrigin` in the authenticated user
+profile. `SCITRERA_STORAGE_PUBLIC_ORIGIN` defaults it from the tenant chart's
+`publicOrigin`; the deployment compiler derives the same setting from
+`public.origin` in Compose. Operators may override `storageOrigin` in tenant UI
+settings for a separate storage host. Unset configuration preserves same-origin
+hosting. Keep HTTPS origins in production; do not derive this from request headers.
+
+When a shared frontend reads tenant source previews, set
+`platform-shared.ingress.storageOrigins` to its exact HTTPS origin(s). This adds
+credentialed GET/HEAD/OPTIONS CORS only on `/storage/<tenant>/blob` at the tenant
+hostname, with `X-Blob-Capability` allowed. The route retains tenant host-auth,
+identity-header stripping and `Cache-Control: no-store`. It grants no anonymous
+blob reads, upload CORS, storage access on connection aliases, or access to other
+tenants. The browser must send the session cookie and a valid user-bound blob
+capability. Leave the list empty when only the dedicated frontend is used.

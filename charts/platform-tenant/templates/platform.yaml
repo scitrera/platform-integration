@@ -102,6 +102,8 @@ spec:
           value: {{ .Values.gatewayEndpoint | default (printf "http://shared-gateway.%s.svc:8080/v1" .Values.sharedNamespace) | quote }}
         - name: LLM_GATEWAY_BEARER_TOKEN_FILE
           value: /run/gateway/token
+        - name: SCITRERA_STORAGE_PUBLIC_ORIGIN
+          value: {{ .Values.publicOrigin | quote }}
         - name: WS_ALLOWED_ORIGINS
           value: {{ .Values.publicOrigin }}
         - name: SAHARA_IMAGE

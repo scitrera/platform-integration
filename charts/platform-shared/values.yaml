@@ -91,6 +91,8 @@ ingress:
   # Shared connection hosts expose only /<tenant>/rfe1-ws (raw WS and Socket.IO).
   connectionHostnames: []
   connectionOrigins: []
+  # Exact frontend origins permitted to fetch authenticated tenant blob previews.
+  storageOrigins: []
   enabled: true
   createGateway: true
   parentName: ''

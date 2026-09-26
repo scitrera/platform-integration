@@ -1,0 +1,69 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+{{- if and (ge (int .Values.phase) 2) .Values.components.web .Values.ingress.enabled .Values.ingress.storageOrigins }}
+{{- if or (not .Values.ingress.hostAuth.enabled) (ne .Values.tenant .Values.ingress.hostAuth.tenant) }}
+{{- fail "storage CORS requires matching tenant host authentication" }}
+{{- end }}
+{{- range .Values.ingress.storageOrigins }}
+{{- if not (regexMatch "^https?://[A-Za-z0-9][A-Za-z0-9.-]*(:[0-9]{1,5})?$" .) }}
+{{- fail "storage CORS requires exact HTTP(S) origins" }}
+{{- end }}
+{{- if and (not $.Values.development) (not (hasPrefix "https://" .)) }}
+{{- fail "production storage origins must use HTTPS" }}
+{{- end }}
+{{- end }}
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: {{ .Release.Name }}-storage-previews
+spec:
+  parentRefs:
+  - name: {{ .Values.ingress.parentName | default (printf "%s-public" .Release.Name) }}
+    {{- if .Values.ingress.parentNamespace }}
+    namespace: {{ .Values.ingress.parentNamespace }}
+    {{- end }}
+    sectionName: {{ .Values.ingress.sectionName }}
+  hostnames:
+  - {{ .Values.hostname | quote }}
+  rules:
+  - matches:
+    {{- range list "GET" "HEAD" "OPTIONS" }}
+    - path: {type: PathPrefix, value: {{ printf "/storage/%s/blob" $.Values.tenant | quote }}}
+      method: {{ . }}
+    {{- end }}
+    filters:
+    - type: RequestHeaderModifier
+      requestHeaderModifier:
+        remove: [X-Scitrera-User, X-Scitrera-Name, X-Scitrera-Tenants, X-Scitrera-Default-Tenant, X-Auth-User-ID, X-Auth-Tenant-ID, X-Auth-Principal-Type]
+    - type: ResponseHeaderModifier
+      responseHeaderModifier:
+        set: [{name: Cache-Control, value: no-store}]
+        add: [{name: Vary, value: Origin}]
+    backendRefs:
+    - name: {{ .Release.Name }}-web
+      port: 8080
+---
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: SecurityPolicy
+metadata:
+  name: {{ .Release.Name }}-storage-previews-auth
+spec:
+  targetRefs:
+  - group: gateway.networking.k8s.io
+    kind: HTTPRoute
+    name: {{ .Release.Name }}-storage-previews
+  cors:
+    allowOrigins:
+{{ toYaml .Values.ingress.storageOrigins | indent 4 }}
+    allowCredentials: true
+    allowMethods: [GET, HEAD, OPTIONS]
+    allowHeaders: [Accept, X-Blob-Capability]
+    maxAge: 300s
+  extAuth:
+    failOpen: false
+    http:
+      backendRefs:
+      - name: {{ .Release.Name }}-auth-gate
+        port: 8080
+      path: /authorize
+    headersToExtAuth: [Cookie, Authorization, Accept, Sec-Fetch-Dest]
+{{- end }}

@@ -385,6 +385,12 @@
           "items": {
             "type": "string"
           }
+        },
+        "storageOrigins": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
         }
       }
     },

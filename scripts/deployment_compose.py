@@ -65,6 +65,7 @@ def build(resolved, policy, resources):
     document = render_compose(yaml.safe_load((ROOT / "compose/compose.yaml").read_text()), tenants)
     document = walk(document, _mount)
     services, artifacts = document["services"], {}
+    services["platform-" + tenant].setdefault("environment", {})["SCITRERA_STORAGE_PUBLIC_ORIGIN"] = config["public"]["origin"]
     if config["database"]["mode"] == "consolidated":
         name = "tenant-postgres-" + tenant
         old_names = ["ml-postgres-" + tenant, "dc-postgres-" + tenant, "sparkroute-postgres", "storage-postgres"]
