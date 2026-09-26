@@ -115,6 +115,8 @@ spec:
           value: {{ include "platform-shared.authOrigins" . | fromJsonArray | join "," | quote }}
         - name: AUTH_PROXY_SESSION_COOKIE_DOMAIN
           value: {{ .Values.authSession.cookieDomain | quote }}
+        - name: SCITRERA_AUTH_GENERIC_APP_ORIGINS
+          value: {{ join "," .Values.authSession.genericAppOrigins | quote }}
         - name: SCITRERA_AUTH_LOGIN_DEFAULT_TENANT
           value: {{ .Values.authSession.defaultTenant | quote }}
         - name: SCITRERA_AUTH_ALLOWED_REDIRECT_ORIGINS

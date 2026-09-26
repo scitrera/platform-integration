@@ -82,10 +82,15 @@ authSession:
   ttl: 24h
   cookieDomain: ''
   defaultTenant: ''
+  # Generic entry origins eligible for sole-tenant application redirects.
+  genericAppOrigins: []
   # Exact trusted application origins; publicOrigin is always included.
   # Used by checkz, Envoy CORS and post-login return URL validation.
   allowedOrigins: []
 ingress:
+  # Shared connection hosts expose only /<tenant>/rfe1-ws (raw WS and Socket.IO).
+  connectionHostnames: []
+  connectionOrigins: []
   enabled: true
   createGateway: true
   parentName: ''

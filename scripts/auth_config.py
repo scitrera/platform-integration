@@ -76,12 +76,19 @@ def validate_config(config):
     if type(tenant["enabled"]) is not bool:
         raise ValueError("Tenant enabled must be a boolean")
     metadata = tenant.get("metadata", {})
-    fields(metadata, (), ("logo", "default_workspace"))
+    fields(metadata, (), ("logo", "default_workspace", "application_url"))
     for key, value in metadata.items():
         if value is not None and (not isinstance(value, str) or len(value) > 2048):
             raise ValueError("Tenant metadata must contain strings or null")
         if key == "logo" and value and not value.startswith("https://"):
             raise ValueError("Tenant logo must use HTTPS")
+        if key == "application_url" and value:
+            from urllib.parse import urlsplit
+            parsed = urlsplit(value)
+            if (parsed.scheme != "https" or not parsed.hostname or parsed.username or parsed.password
+                    or parsed.query or parsed.fragment or "?" in value or "#" in value
+                    or "\\" in value or any(ord(c) < 32 or ord(c) == 127 for c in value)):
+                raise ValueError("Tenant application_url must be an HTTPS URL without credentials, query or fragment")
     domains = config["domains"]
     if not isinstance(domains, list):
         raise ValueError("domains must be a list")

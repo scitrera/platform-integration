@@ -221,3 +221,25 @@ readiness; HTTP101 alone does not. Gateway health/list-model checks do not prove
 provider inference. Keep logs local: identity projections, signed storage URLs
 and delegated credentials can appear in application errors. Configure your own
 log/metric collection; no hosted telemetry destination is enabled by default.
+
+## Generic login and tenant connection aliases
+
+For shared login, leave `authSession.defaultTenant` empty and select the generic
+frontend in `publicOrigin`. `authSession.genericAppOrigins` is an opt-in subset of
+the trusted session origins; it permits a sole tenant's configured application
+URL to be used from those frontend roots. It requires auth-go with the tenant
+application routing feature; older images ignore the new environment variable.
+Tenant provisioning accepts optional `tenant.metadata.application_url`, an HTTPS
+URL without credentials, query or fragment. Explicit tenant paths remain usable
+on the shared frontend even when an application URL is configured.
+
+A tenant serving release can set `ingress.connectionHostnames` to exact shared
+connection hostnames and `ingress.connectionOrigins` to their explicit trusted
+HTTPS frontend origins. The additional route exposes only `/<tenant>/rfe1-ws`
+and its descendants (raw WebSocket `/v2` and Socket.IO), to the existing web
+proxy. It uses the same tenant-scoped auth gate, strips client identity headers,
+and permits credentialed GET/POST/OPTIONS for browser transports. It does not
+expose frontend, storage, auth or other tenant paths on that hostname. The
+normal dedicated-host route is unchanged. Aliases require an existing shared
+Gateway, enabled host authentication, DNS and TLS coverage. Backend allowed
+origins must also include the intended browser frontends.

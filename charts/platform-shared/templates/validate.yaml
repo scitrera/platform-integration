@@ -24,3 +24,9 @@
 {{- end }}
 {{- end }}
 {{- end }}
+
+{{- range $origin := .Values.authSession.genericAppOrigins }}
+{{- if not (has $origin (include "platform-shared.authOrigins" $ | fromJsonArray)) }}
+{{- fail "authSession.genericAppOrigins must belong to the trusted auth origins" }}
+{{- end }}
+{{- end }}

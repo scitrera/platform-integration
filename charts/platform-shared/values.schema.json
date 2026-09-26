@@ -322,6 +322,12 @@
             "master",
             "addresses"
           ]
+        },
+        "genericAppOrigins": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
         }
       }
     },
@@ -366,6 +372,18 @@
             "verifyURL": {
               "type": "string"
             }
+          }
+        },
+        "connectionHostnames": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "connectionOrigins": {
+          "type": "array",
+          "items": {
+            "type": "string"
           }
         }
       }

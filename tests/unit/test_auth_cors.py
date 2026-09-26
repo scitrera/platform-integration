@@ -57,6 +57,16 @@ class AuthCORSTests(unittest.TestCase):
         self.assertIn({'name': 'Cache-Control', 'value': 'no-store'}, response['set'])
         self.assertIn({'name': 'Vary', 'value': 'Origin'}, response['add'])
 
+    def test_generic_entry_origins_are_explicit_and_trusted(self):
+        self.values['authSession']['genericAppOrigins'] = ['https://app.example.test']
+        deployment = next(d for d in self.render() if d['kind'] == 'Deployment')
+        env = {e['name']: e['value'] for e in deployment['spec']['template']['spec']['containers'][0]['env']}
+        self.assertEqual(env['SCITRERA_AUTH_LOGIN_DEFAULT_TENANT'], '')
+        self.assertEqual(env['SCITRERA_AUTH_GENERIC_APP_ORIGINS'], 'https://app.example.test')
+        self.values['authSession']['genericAppOrigins'] = ['https://untrusted.example.test']
+        with self.assertRaisesRegex(ValueError, 'trusted auth origins'):
+            self.render()
+
     def test_default_origin_retained_without_allow_all(self):
         self.values['authSession']['allowedOrigins'] = []
         policy = next(d for d in self.render() if d['kind'] == 'SecurityPolicy')

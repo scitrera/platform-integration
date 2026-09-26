@@ -76,6 +76,20 @@ class Registry:
 
 
 class AuthConfigTests(unittest.TestCase):
+    def test_optional_application_url_validation(self):
+        for value in ['https://customer.example/customer', '', None]:
+            candidate = config()
+            candidate['tenant']['metadata']['application_url'] = value
+            auth_config.validate_config(candidate)
+        for value in ['http://customer.example', 'https://user:pass@customer.example',
+                      'https://customer.example/?next=evil', 'https://customer.example/#',
+                      'https://customer.example/?', 'javascript:alert(1)']:
+            with self.subTest(value=value), self.assertRaises(ValueError):
+                candidate = config()
+                candidate['tenant']['metadata']['application_url'] = value
+                auth_config.validate_config(candidate)
+
+
     def test_create_disabled_configure_enable_and_repeat_without_writes(self):
         registry = Registry()
         desired = auth_config.validate_config(config())
